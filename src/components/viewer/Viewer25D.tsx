@@ -226,6 +226,10 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
           enablePan
           enableZoom
           enableRotate
+          enableDamping
+          dampingFactor={0.08}
+          rotateSpeed={0.5}
+          zoomSpeed={0.6}
           minPolarAngle={FIXED_POLAR}
           maxPolarAngle={FIXED_POLAR}
           target={[0, 0, 0]}
