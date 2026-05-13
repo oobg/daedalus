@@ -3,28 +3,28 @@
 /* ── Design token layer ──────────────────────────────────────────────────── */
 /* Tailwind v4 @theme exposes these as utilities (bg-surface-0, text-text-primary, etc.) */
 @theme {
-  /* Surface hierarchy */
-  --color-surface-0:   #FFFFFF;
-  --color-surface-1:   #FAFAF9;
-  --color-surface-2:   #F7F6F2;
-  --color-surface-3:   #F2F1ED;
+  /* Surface — subtle cool-violet tint */
+  --color-surface-0: #FFFFFF;
+  --color-surface-1: #FAFAFD;
+  --color-surface-2: #F5F4FA;
+  --color-surface-3: #EEEDF5;
 
-  /* Border */
-  --color-border-strong:   #D8D5CF;
-  --color-border-default:  #E8E6E1;
-  --color-border-subtle:   #EEEAE3;
+  /* Border — cool-tinted */
+  --color-border-strong:   #D3D0E5;
+  --color-border-default:  #E2E0EF;
+  --color-border-subtle:   #ECEAF5;
 
-  /* Text */
-  --color-text-primary:    #1A1A18;
-  --color-text-secondary:  #6B6B65;
-  --color-text-muted:      #A8A8A2;
-  --color-text-disabled:   #C4C4BE;
+  /* Text — slightly violet-cool */
+  --color-text-primary:    #1C1A2C;
+  --color-text-secondary:  #6B6878;
+  --color-text-muted:      #A8A5B8;
+  --color-text-disabled:   #C8C5D5;
 
-  /* Accent — teal */
-  --color-accent:          #4A7C6F;
-  --color-accent-hover:    #3D6B60;
-  --color-accent-subtle:   #EAF2F0;
-  --color-accent-text:     #3A6C5F;
+  /* Accent — muted violet */
+  --color-accent:          #7267C0;
+  --color-accent-hover:    #6257AE;
+  --color-accent-subtle:   #F0EEFF;
+  --color-accent-text:     #5449A0;
 
   /* Semantic */
   --color-destructive:     #C0392B;
@@ -33,22 +33,46 @@
   --color-warning-bg:      #FFFBF0;
 
   /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  8px;
+  --radius-xl:  12px;
 
   /* Shadow */
-  --shadow-float: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-float: 0 4px 16px rgba(60, 50, 120, 0.08);
+  --shadow-sm:    0 1px 3px rgba(60, 50, 120, 0.05);
+  --shadow-md:    0 4px 12px rgba(60, 50, 120, 0.10);
+
+  /* Font sizes */
+  --font-size-micro: 10px;
+}
+
+/* ── Tailwind v4: inline theme aliases for runtime var() access ──────────── */
+@theme inline {
+  --color-primary:            var(--color-accent);
+  --color-primary-hover:      var(--color-accent-hover);
+  --color-primary-subtle:     var(--color-accent-subtle);
+  --color-primary-foreground: #FFFFFF;
+  --color-muted:              var(--color-surface-3);
+  --color-muted-foreground:   var(--color-text-muted);
 }
 
 /* ── CSS custom properties (runtime access via var()) ────────────────────── */
 :root {
-  --color-surface:           #F7F6F2;
-  --color-surface-secondary: #F2F1ED;
-  --color-border:            #E8E6E1;
-  --color-text:              #1A1A18;
-  --color-text-muted:        #A8A8A2;
-  --color-accent:            #4A7C6F;
+  --color-surface:           #F5F4FA;
+  --color-surface-secondary: #EEEDF5;
+  --color-border:            #E2E0EF;
+  --color-text:              #1C1A2C;
+  --color-text-muted:        #A8A5B8;
+  --color-accent:            #7267C0;
+
+  /* Motion */
+  --duration-fast:   75ms;
+  --duration-base:   150ms;
+  --duration-slow:   250ms;
+  --ease-default:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in:         cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:        cubic-bezier(0, 0, 0.2, 1);
 }
 
 /* ── Reset ───────────────────────────────────────────────────────────────── */
@@ -76,12 +100,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #D8D5CF;
+  background: #D3D0E5;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #B8B5AF;
+  background: #B8B5CC;
 }
 
 /* ── Focus ring utility ──────────────────────────────────────────────────── */
@@ -89,6 +113,14 @@ body {
   outline: none;
 }
 .focus-ring:focus-visible {
-  outline: 2px solid rgba(74, 124, 111, 0.45);
+  outline: 2px solid rgba(114, 103, 192, 0.45);
   outline-offset: 1px;
+}
+
+/* ── Micro label ─────────────────────────────────────────────────────────── */
+.text-micro {
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  font-weight: 600;
 }
