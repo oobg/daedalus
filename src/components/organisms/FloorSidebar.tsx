@@ -1,11 +1,15 @@
 "use client";
 
 import { useRef } from "react";
+import { Plus, Trash2, Image, Upload, Download, Save, FolderOpen, FileJson } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted mb-2">
+    <p className="text-micro text-text-muted mb-2 uppercase tracking-[0.08em] font-semibold">
       {children}
     </p>
   );
@@ -69,13 +73,12 @@ export default function FloorSidebar() {
       <div className="p-3 border-b border-border-default">
         <div className="flex items-center justify-between mb-2">
           <SectionLabel>층</SectionLabel>
-          <button
-            onClick={addFloor}
-            className="text-[11px] px-2 py-0.5 rounded-md bg-surface-3 text-text-secondary hover:bg-border-subtle transition-colors duration-75"
-          >
-            + 추가
-          </button>
+          <Button variant="ghost" size="xs" onClick={addFloor} className="gap-1 h-5 px-1.5">
+            <Plus size={10} strokeWidth={2.5} />
+            추가
+          </Button>
         </div>
+
         <ul className="space-y-0.5">
           {[...floors].reverse().map(floor => {
             const isActive = floor.floorId === activeFloorId;
@@ -83,18 +86,19 @@ export default function FloorSidebar() {
               <li
                 key={floor.floorId}
                 onClick={() => setActiveFloor(floor.floorId)}
-                className={[
-                  "flex items-center justify-between px-2.5 py-2 rounded-md cursor-pointer text-sm transition-colors duration-75",
+                className={cn(
+                  "flex items-center justify-between px-2.5 py-1.5 rounded-md cursor-pointer",
+                  "text-sm transition-colors duration-75",
                   isActive
                     ? "bg-accent text-white"
-                    : "hover:bg-surface-3 text-text-primary",
-                ].join(" ")}
+                    : "hover:bg-surface-3 text-text-primary"
+                )}
               >
                 <span className="font-medium truncate">{floor.floorName}</span>
-                <span className={[
-                  "text-[11px] shrink-0 ml-1",
-                  isActive ? "text-white/60" : "text-text-muted",
-                ].join(" ")}>
+                <span className={cn(
+                  "text-[11px] shrink-0 ml-1 tabular-nums",
+                  isActive ? "text-white/60" : "text-text-muted"
+                )}>
                   {floor.floorHeight}m
                 </span>
               </li>
@@ -110,11 +114,7 @@ export default function FloorSidebar() {
 
           <div className="space-y-1">
             <label className="text-[11px] text-text-muted">이름</label>
-            <input
-              className="w-full px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-surface-3
-                         text-text-primary placeholder:text-text-disabled
-                         focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15
-                         transition-colors duration-75"
+            <Input
               value={activeFloor.floorName}
               onChange={e => updateFloor(activeFloor.floorId, { floorName: e.target.value })}
             />
@@ -122,78 +122,83 @@ export default function FloorSidebar() {
 
           <div className="space-y-1">
             <label className="text-[11px] text-text-muted">높이 (m)</label>
-            <input
+            <Input
               type="number"
               min={0.5}
               step={0.5}
-              className="w-full px-2.5 py-1.5 text-sm border border-border-default rounded-md bg-surface-3
-                         text-text-primary
-                         focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15
-                         transition-colors duration-75"
               value={activeFloor.floorHeight}
-              onChange={e => updateFloor(activeFloor.floorId, { floorHeight: parseFloat(e.target.value) || 3 })}
+              onChange={e =>
+                updateFloor(activeFloor.floorId, { floorHeight: parseFloat(e.target.value) || 3 })
+              }
             />
           </div>
 
-          <button
+          <Button
+            variant="secondary"
+            size="xs"
+            className="w-full justify-start gap-1.5"
             onClick={() => imageFileRef.current?.click()}
-            className="w-full text-[11px] px-2 py-1.5 bg-surface-3 hover:bg-border-subtle rounded-md
-                       text-text-secondary transition-colors duration-75"
           >
+            <Image size={10} strokeWidth={1.8} />
             {activeFloor.referenceImage ? "도면 이미지 변경" : "도면 이미지 업로드"}
-          </button>
+          </Button>
 
           {activeFloor.referenceImage && (
-            <button
+            <Button
+              variant="danger"
+              size="xs"
+              className="w-full justify-start gap-1.5"
               onClick={() => setReferenceImage(activeFloor.floorId, null)}
-              className="w-full text-[11px] px-2 py-1.5 rounded-md text-destructive
-                         hover:bg-destructive-bg transition-colors duration-75"
             >
+              <Trash2 size={10} strokeWidth={1.8} />
               도면 이미지 제거
-            </button>
+            </Button>
           )}
 
           {floors.length > 1 && (
-            <button
+            <Button
+              variant="danger"
+              size="xs"
+              className="w-full justify-start gap-1.5"
               onClick={() => removeFloor(activeFloor.floorId)}
-              className="w-full text-[11px] px-2 py-1.5 rounded-md text-destructive
-                         hover:bg-destructive-bg transition-colors duration-75"
             >
+              <Trash2 size={10} strokeWidth={1.8} />
               이 층 삭제
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {/* File actions */}
-      <div className="p-3 mt-auto space-y-1">
+      <div className="p-3 mt-auto space-y-1.5">
         <SectionLabel>파일</SectionLabel>
-        <button
-          onClick={saveToLocalStorage}
-          className="w-full text-[11px] px-2 py-1.5 bg-accent text-white rounded-md
-                     hover:bg-accent-hover transition-colors duration-75 font-medium"
-        >
+
+        <Button variant="primary" size="xs" className="w-full justify-start gap-1.5" onClick={saveToLocalStorage}>
+          <Save size={10} strokeWidth={2} />
           저장 (로컬)
-        </button>
-        {[
-          { label: "불러오기 (로컬)", action: () => loadFromLocalStorage() },
-          { label: "JSON 내보내기",   action: handleExportJSON },
-          { label: "JSON 가져오기",   action: () => importFileRef.current?.click() },
-          { label: "SVG 내보내기",    action: () => exportSVG() },
-        ].map(({ label, action }) => (
-          <button
+        </Button>
+
+        {([
+          { label: "불러오기 (로컬)", Icon: FolderOpen, action: () => loadFromLocalStorage() },
+          { label: "JSON 내보내기",   Icon: Download,   action: handleExportJSON },
+          { label: "JSON 가져오기",   Icon: Upload,     action: () => importFileRef.current?.click() },
+          { label: "SVG 내보내기",    Icon: FileJson,   action: () => exportSVG() },
+        ] as const).map(({ label, Icon, action }) => (
+          <Button
             key={label}
+            variant="ghost"
+            size="xs"
+            className="w-full justify-start gap-1.5"
             onClick={action}
-            className="w-full text-[11px] px-2 py-1.5 bg-surface-3 hover:bg-border-subtle
-                       rounded-md text-text-secondary transition-colors duration-75"
           >
+            <Icon size={10} strokeWidth={1.8} />
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
-      <input ref={importFileRef} type="file" accept=".json"    className="hidden" onChange={handleImportJSON} />
-      <input ref={imageFileRef}  type="file" accept="image/*"  className="hidden" onChange={handleReferenceImage} />
+      <input ref={importFileRef} type="file" accept=".json"   className="hidden" onChange={handleImportJSON} />
+      <input ref={imageFileRef}  type="file" accept="image/*" className="hidden" onChange={handleReferenceImage} />
     </aside>
   );
 }
