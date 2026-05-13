@@ -22,7 +22,7 @@ import {
   updateEditorProject,
 } from "@/domain/editor-state";
 
-export type ToolType = "select" | "room" | "door" | "window" | "stair" | "elevator";
+export type ToolType = "select" | "room" | "exterior" | "door" | "window" | "stair" | "elevator";
 
 const STORAGE_KEY = "daedalus.project";
 
@@ -42,6 +42,7 @@ interface EditorStoreState {
   addDraftPoint: (point: EditorPoint) => void;
   cancelDraft: () => void;
   commitDraft: () => void;
+  setExteriorPolygon: (points: EditorPoint[] | null) => void;
 
   updateRoom: (floorId: string, roomId: string, input: { roomName?: string; roomPolygon?: EditorPoint[]; sharedBoundaries?: SharedBoundaryRef[] }) => void;
   removeRoom: (floorId: string, roomId: string) => void;
@@ -104,15 +105,25 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   addDraftPoint: (point) => {
     const { activeTool, draftPoints } = get();
-    if (activeTool !== "room") return;
+    if (activeTool !== "room" && activeTool !== "exterior") return;
     set({ isDrawing: true, draftPoints: [...draftPoints, point] });
   },
 
   cancelDraft: () => set({ isDrawing: false, draftPoints: [] }),
 
   commitDraft: () => {
-    const { draftPoints, project } = get();
+    const { draftPoints, project, activeTool } = get();
     if (draftPoints.length < 3) return;
+
+    if (activeTool === "exterior") {
+      set(s => ({
+        project: { ...s.project, exteriorPolygon: [...draftPoints] },
+        isDrawing: false,
+        draftPoints: [],
+      }));
+      return;
+    }
+
     const activeFloorId = project.viewState.activeFloorId;
     if (!activeFloorId) return;
     const roomCount = project.floors.find(f => f.floorId === activeFloorId)?.rooms.length ?? 0;
@@ -127,6 +138,10 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
       isDrawing: false,
       draftPoints: [],
     });
+  },
+
+  setExteriorPolygon: (points) => {
+    set(s => ({ project: { ...s.project, exteriorPolygon: points } }));
   },
 
   updateRoom: (floorId, roomId, input) => {

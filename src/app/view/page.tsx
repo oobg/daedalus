@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import type { EditorFloor } from "@/domain/editor-state";
+import type { EditorFloor, EditorPoint } from "@/domain/editor-state";
 
 const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
 
@@ -11,6 +11,7 @@ const STORAGE_KEY = "daedalus.project";
 interface ProjectSnapshot {
   floors: EditorFloor[];
   activeFloorId: string | null;
+  exteriorPolygon: EditorPoint[] | null;
 }
 
 function parseProject(json: string): ProjectSnapshot | null {
@@ -18,8 +19,9 @@ function parseProject(json: string): ProjectSnapshot | null {
     const data = JSON.parse(json);
     if (!data || !Array.isArray(data.floors)) return null;
     return {
-      floors:        data.floors,
-      activeFloorId: data.viewState?.activeFloorId ?? data.floors[0]?.floorId ?? null,
+      floors:          data.floors,
+      activeFloorId:   data.viewState?.activeFloorId ?? data.floors[0]?.floorId ?? null,
+      exteriorPolygon: data.exteriorPolygon ?? null,
     };
   } catch {
     return null;
@@ -129,7 +131,7 @@ export default function ViewPage() {
 
       {/* 2.5D viewer */}
       <div className="flex-1 overflow-hidden">
-        <Viewer25D floors={project.floors} activeFloorId={project.activeFloorId} />
+        <Viewer25D floors={project.floors} activeFloorId={project.activeFloorId} exteriorPolygon={project.exteriorPolygon} />
       </div>
 
       <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />

@@ -305,13 +305,49 @@ function ScreenshotButton() {
   );
 }
 
+// ── Exterior wall — wraps all floors ─────────────────────────────────────────
+interface ExteriorWallProps {
+  points: EditorPoint[];
+  totalHeight: number;
+}
+
+function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
+  const wallH = totalHeight * WALL_HEIGHT_SCALE;
+
+  const wallSegments = useMemo(() =>
+    points
+      .map((p1, i) => {
+        const p2 = points[(i + 1) % points.length];
+        const x1 = p1.x / 100, z1 = p1.y / 100;
+        const x2 = p2.x / 100, z2 = p2.y / 100;
+        const dx = x2 - x1, dz = z2 - z1;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        const angle = -Math.atan2(dz, dx);
+        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle };
+      })
+      .filter(s => s.len > 0.001),
+  [points]);
+
+  return (
+    <group>
+      {wallSegments.map((seg, i) => (
+        <mesh key={i} position={[seg.cx, wallH / 2, seg.cz]} rotation={[0, seg.angle, 0]}>
+          <boxGeometry args={[seg.len, wallH, WALL_THICKNESS * 1.5]} />
+          <meshLambertMaterial color="#9A9488" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 interface Props {
   floors: EditorFloor[];
   activeFloorId: string | null;
+  exteriorPolygon?: EditorPoint[] | null;
 }
 
-export default function Viewer25D({ floors, activeFloorId }: Props) {
+export default function Viewer25D({ floors, activeFloorId, exteriorPolygon }: Props) {
   const sceneCenter = useMemo(() => computeSceneCenter(floors), [floors]);
 
   let cumulativeY = 0;
@@ -320,6 +356,7 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
     cumulativeY += floor.floorHeight;
     return { floor, y, colorIndex: i };
   });
+  const totalHeight = floors.reduce((s, f) => s + f.floorHeight, 0);
 
   return (
     <div className="w-full h-full bg-[#F7F6F2]">
@@ -338,6 +375,9 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
 
         <Suspense fallback={null}>
           <group position={[-sceneCenter.x, 0, -sceneCenter.z]}>
+            {exteriorPolygon && exteriorPolygon.length >= 3 && (
+              <ExteriorWall points={exteriorPolygon} totalHeight={totalHeight} />
+            )}
             {floorData.map(({ floor, y, colorIndex }) =>
               floor.rooms.map(room => (
                 <RoomMesh

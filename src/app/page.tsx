@@ -18,8 +18,9 @@ export default function EditorPage() {
   const canvasContainerRef          = useRef<HTMLDivElement>(null);
   const stageRef                    = useRef(null);
 
-  const floors         = useEditorStore(s => s.project.floors);
-  const activeFloorId  = useEditorStore(s => s.project.viewState.activeFloorId);
+  const floors          = useEditorStore(s => s.project.floors);
+  const activeFloorId   = useEditorStore(s => s.project.viewState.activeFloorId);
+  const exteriorPolygon = useEditorStore(s => s.project.exteriorPolygon ?? null);
   const exportJSON     = useEditorStore(s => s.exportJSON);
   const loadFromLocalStorage = useEditorStore(s => s.loadFromLocalStorage);
 
@@ -112,7 +113,7 @@ export default function EditorPage() {
               stageRef={stageRef}
             />
           ) : (
-            <Viewer25D floors={floors} activeFloorId={activeFloorId} />
+            <Viewer25D floors={floors} activeFloorId={activeFloorId} exteriorPolygon={exteriorPolygon} />
           )}
         </main>
 

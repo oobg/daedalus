@@ -66,6 +66,7 @@ export interface EditorProject {
   objectVersion: number;
   floors: EditorFloor[];
   viewState: EditorViewState;
+  exteriorPolygon: EditorPoint[] | null;
 }
 
 export interface BuildingGuideEditorState {
@@ -93,6 +94,7 @@ export interface EditorProjectInput {
   objectVersion?: number;
   floors?: readonly EditorFloorInput[];
   viewState?: Partial<EditorViewState>;
+  exteriorPolygon?: EditorPoint[] | null;
 }
 
 export interface UpdateEditorProjectInput {
@@ -142,6 +144,7 @@ export function createEditorProject(input: EditorProjectInput): EditorProject {
       activeFloorId: resolveActiveFloorId(floors, requestedActiveFloorId),
       selectedRoomId: input.viewState?.selectedRoomId ?? null,
     },
+    exteriorPolygon: input.exteriorPolygon ?? null,
   };
 }
 

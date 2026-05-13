@@ -5,6 +5,7 @@ import type { ToolType } from "@/store/editorStore";
 
 const TOOLS: { id: ToolType; label: string; icon: string }[] = [
   { id: "select",    label: "선택",      icon: "↖" },
+  { id: "exterior",  label: "외벽",      icon: "⬜" },
   { id: "room",      label: "방",        icon: "▭" },
   { id: "door",      label: "문",        icon: "⬛" },
   { id: "window",    label: "창문",      icon: "🪟" },
