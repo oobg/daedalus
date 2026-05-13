@@ -2,7 +2,9 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { Grid2x2, FolderOpen, X } from "lucide-react";
 import type { EditorFloor, EditorPoint } from "@/domain/editor-state";
+import { Button } from "@/components/ui/button";
 
 const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
 
@@ -58,13 +60,18 @@ export default function ViewPage() {
   if (!project) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-surface-2 gap-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-xl font-semibold text-text-primary tracking-tight">
-            Space Raven 뷰어
-          </h1>
-          <p className="text-sm text-text-muted">
-            JSON 파일을 불러오거나, 편집기에서 &apos;뷰어로 공유&apos;를 통해 접근하세요.
-          </p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shadow-md">
+            <Grid2x2 size={20} className="text-white" strokeWidth={1.8} />
+          </div>
+          <div className="text-center space-y-1.5">
+            <h1 className="text-lg font-semibold text-text-primary tracking-tight">
+              Space Raven 뷰어
+            </h1>
+            <p className="text-sm text-text-muted max-w-xs leading-relaxed">
+              JSON 파일을 불러오거나, 편집기에서 &apos;뷰어로 공유&apos;를 통해 접근하세요.
+            </p>
+          </div>
         </div>
 
         {error && (
@@ -73,13 +80,10 @@ export default function ViewPage() {
           </p>
         )}
 
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="px-5 py-2.5 bg-accent text-white rounded-lg text-sm font-medium
-                     hover:bg-accent-hover transition-colors duration-100 shadow-float"
-        >
+        <Button variant="primary" size="md" className="gap-2 shadow-float" onClick={() => fileRef.current?.click()}>
+          <FolderOpen size={14} strokeWidth={1.8} />
           JSON 파일 불러오기
-        </button>
+        </Button>
 
         <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
       </div>
@@ -88,41 +92,42 @@ export default function ViewPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-2">
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-11 bg-surface-0
                       border-b border-border-default shrink-0">
-        <span className="text-sm font-semibold text-accent tracking-tight">
-          Space Raven
-          <span className="ml-2 text-[11px] font-normal text-text-muted">읽기 전용 뷰어</span>
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded bg-accent flex items-center justify-center">
+            <Grid2x2 size={11} className="text-white" strokeWidth={2} />
+          </div>
+          <span className="text-[13px] font-semibold text-text-primary tracking-tight">
+            Space Raven
+          </span>
+          <span className="text-[11px] text-text-muted">읽기 전용 뷰어</span>
+        </div>
+
         <div className="flex items-center gap-1">
-          <span className="text-[11px] text-text-muted mr-1">
+          <span className="text-[11px] text-text-muted mr-1 tabular-nums">
             {project.floors.length}개 층
           </span>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="text-xs px-2.5 py-1 rounded-md text-text-secondary bg-surface-3
-                       hover:bg-border-subtle transition-colors duration-75"
-          >
+          <Button variant="ghost" size="xs" className="gap-1.5" onClick={() => fileRef.current?.click()}>
+            <FolderOpen size={10} strokeWidth={1.8} />
             다른 파일 열기
-          </button>
-          <button
-            onClick={() => setProject(null)}
-            className="text-xs px-2.5 py-1 rounded-md text-text-secondary bg-surface-3
-                       hover:bg-border-subtle transition-colors duration-75"
-          >
+          </Button>
+          <Button variant="ghost" size="xs" className="gap-1.5" onClick={() => setProject(null)}>
+            <X size={10} strokeWidth={2} />
             닫기
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Floor legend */}
-      <div className="flex items-center gap-4 px-4 h-8 bg-surface-2
+      <div className="flex items-center gap-4 px-4 h-8 bg-surface-0
                       border-b border-border-default shrink-0 overflow-x-auto">
         {[...project.floors].reverse().map(floor => (
           <span key={floor.floorId} className="text-[11px] text-text-secondary whitespace-nowrap">
             {floor.floorName}
-            <span className="ml-1 text-text-muted">
+            <span className="ml-1 text-text-muted tabular-nums">
               {floor.floorHeight}m · {floor.rooms.length}실
             </span>
           </span>
@@ -131,7 +136,11 @@ export default function ViewPage() {
 
       {/* 2.5D viewer */}
       <div className="flex-1 overflow-hidden">
-        <Viewer25D floors={project.floors} activeFloorId={project.activeFloorId} exteriorPolygon={project.exteriorPolygon} />
+        <Viewer25D
+          floors={project.floors}
+          activeFloorId={project.activeFloorId}
+          exteriorPolygon={project.exteriorPolygon}
+        />
       </div>
 
       <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
