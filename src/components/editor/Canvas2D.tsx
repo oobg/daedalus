@@ -10,13 +10,13 @@ import type { RoomOpeningType, EditorPoint } from "@/domain/editor-state";
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const ROOM_FILL            = "#DDD8CF";
-const ROOM_FILL_SELECTED   = "#EBF3F0";
+const ROOM_FILL_SELECTED   = "#EEEDFB";
 const ROOM_STROKE          = "#B8B2A8";
-const ROOM_STROKE_SELECTED = "#4A7C6F";
-const DRAFT_COLOR          = "#4A7C6F";
+const ROOM_STROKE_SELECTED = "#7267C0";
+const DRAFT_COLOR          = "#7267C0";
 const EXTERIOR_STROKE      = "#7A6B60";
 const VERTEX_FILL          = "#FFFFFF";
-const VERTEX_STROKE        = "#4A7C6F";
+const VERTEX_STROKE        = "#7267C0";
 
 // Auto-close threshold for exterior polygon (pixels)
 const CLOSE_THRESHOLD = 16;
@@ -64,10 +64,10 @@ function DoorSymbol({ x, y, alpha = 1 }: { x: number; y: number; alpha?: number 
   return (
     <Group x={x} y={y} opacity={alpha}>
       <Line points={[-r, 0, -r, -4]} stroke="#555" strokeWidth={2} />
-      <Line points={[-r, 0, 0, 0]} stroke="#4a7c6f" strokeWidth={2} />
+      <Line points={[-r, 0, 0, 0]} stroke="#7267C0" strokeWidth={2} />
       <Arc innerRadius={0} outerRadius={r} angle={90} rotation={-90}
-        x={-r} y={0} stroke="#4a7c6f" strokeWidth={1.5}
-        fill="rgba(74,124,111,0.12)" />
+        x={-r} y={0} stroke="#7267C0" strokeWidth={1.5}
+        fill="rgba(114,103,192,0.12)" />
     </Group>
   );
 }

@@ -2,13 +2,16 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { Download, ExternalLink } from "lucide-react";
 import Toolbar from "@/components/organisms/Toolbar";
 import FloorSidebar from "@/components/organisms/FloorSidebar";
 import PropertyPanel from "@/components/organisms/PropertyPanel";
+import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/store/editorStore";
+import { cn } from "@/lib/utils";
 
-const Canvas2D   = dynamic(() => import("@/components/editor/Canvas2D"),   { ssr: false });
-const Viewer25D  = dynamic(() => import("@/components/viewer/Viewer25D"),  { ssr: false });
+const Canvas2D  = dynamic(() => import("@/components/editor/Canvas2D"),  { ssr: false });
+const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
 
 type ViewMode = "edit" | "preview";
 
@@ -21,7 +24,6 @@ export default function EditorPage() {
   const floors          = useEditorStore(s => s.project.floors);
   const activeFloorId   = useEditorStore(s => s.project.viewState.activeFloorId);
   const exteriorPolygon = useEditorStore(s => s.project.exteriorPolygon ?? null);
-  const exportJSON     = useEditorStore(s => s.exportJSON);
   const loadFromLocalStorage = useEditorStore(s => s.loadFromLocalStorage);
 
   useEffect(() => { loadFromLocalStorage(); }, [loadFromLocalStorage]);
@@ -55,19 +57,20 @@ export default function EditorPage() {
       <Toolbar />
 
       {/* Mode bar */}
-      <div className="flex items-center gap-1 px-3 h-9 bg-surface-2 border-b border-border-default shrink-0">
+      <div className="flex items-center gap-2 px-4 h-9 bg-surface-0 border-b border-border-default shrink-0">
+
         {/* Mode tabs */}
         <div className="flex items-center gap-0.5 bg-surface-3 rounded-md p-0.5">
           {(["edit", "preview"] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={[
-                "px-3 py-0.5 rounded text-xs font-medium transition-colors duration-100",
+              className={cn(
+                "px-3 py-1 rounded text-xs font-medium transition-colors duration-75",
                 viewMode === mode
                   ? "bg-accent text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-primary",
-              ].join(" ")}
+                  : "text-text-secondary hover:text-text-primary"
+              )}
             >
               {mode === "edit" ? "2D 편집" : "2.5D 미리보기"}
             </button>
@@ -77,24 +80,27 @@ export default function EditorPage() {
         {/* Secondary actions */}
         <div className="ml-auto flex items-center gap-1">
           {viewMode === "edit" && (
-            <button
-              onClick={handleExportPNG}
-              className="text-xs px-2.5 py-1 rounded-md text-text-secondary hover:bg-surface-3
-                         hover:text-text-primary transition-colors duration-75"
-            >
-              2D PNG 저장
-            </button>
+            <Button variant="ghost" size="xs" onClick={handleExportPNG} className="gap-1.5">
+              <Download size={11} strokeWidth={1.8} />
+              PNG 저장
+            </Button>
           )}
-          <a
-            href="/view"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs px-2.5 py-1 rounded-md text-text-secondary hover:bg-surface-3
-                       hover:text-text-primary transition-colors duration-75"
-            onClick={() => useEditorStore.getState().saveToLocalStorage()}
+          <Button
+            variant="ghost"
+            size="xs"
+            asChild
+            className="gap-1.5"
           >
-            뷰어로 공유 ↗
-          </a>
+            <a
+              href="/view"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => useEditorStore.getState().saveToLocalStorage()}
+            >
+              <ExternalLink size={11} strokeWidth={1.8} />
+              뷰어로 공유
+            </a>
+          </Button>
         </div>
       </div>
 
