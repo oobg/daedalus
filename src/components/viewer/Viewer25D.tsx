@@ -8,7 +8,7 @@ import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-stat
 
 const FLOOR_COLORS = ["#d4c9b8", "#c8bfae", "#bcb59e", "#b0ab8e", "#a4a17e"];
 const WALL_COLOR = "#9a9690";
-const WALL_HEIGHT_SCALE = 0.4;
+const WALL_HEIGHT_SCALE = 0.3;
 
 // Camera [8,8,8]: polar angle from Y-axis = acos(8 / sqrt(8²+8²+8²)) = acos(1/√3)
 // Locking min===max prevents vertical tilting; only horizontal orbit allowed.
