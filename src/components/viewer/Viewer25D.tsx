@@ -196,8 +196,12 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
-        <ambientLight intensity={0.7} />
-        <directionalLight position={[5, 10, 5]} intensity={0.8} castShadow />
+        <ambientLight intensity={0.85} color="#fff8f0" />
+        <directionalLight position={[4, 12, 6]} intensity={0.45} castShadow
+          shadow-mapSize-width={1024} shadow-mapSize-height={1024}
+          shadow-camera-near={0.5} shadow-camera-far={40}
+          shadow-bias={-0.001}
+        />
 
         <Suspense fallback={null}>
           {/* Offset entire scene so building center sits at world origin */}
