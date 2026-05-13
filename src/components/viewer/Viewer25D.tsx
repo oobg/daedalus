@@ -192,7 +192,7 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
   return (
     <div className="w-full h-full bg-[#f0efeb]">
       <Canvas
-        camera={{ position: [8, 8, 8], fov: 45 }}
+        camera={{ position: [8, 8, 8], fov: 38 }}
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
