@@ -1,17 +1,22 @@
 "use client";
 
+import { X, Trash2 } from "lucide-react";
 import { useEditorStore, useSelectedRoom, useActiveFloor } from "@/store/editorStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 const OPENING_LABELS: Record<string, string> = {
-  door:      "문",
-  window:    "창문",
-  stair:     "계단",
-  elevator:  "엘리베이터",
+  door:     "문",
+  window:   "창문",
+  stair:    "계단",
+  elevator: "엘리베이터",
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+    <p className="text-micro text-text-muted uppercase tracking-[0.08em] font-semibold">
       {children}
     </p>
   );
@@ -19,9 +24,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
-      <label className="text-[11px] text-text-muted">{label}</label>
-      <div className="text-sm text-text-primary">{children}</div>
+    <div className="flex items-center justify-between py-1">
+      <span className="text-[11px] text-text-muted">{label}</span>
+      <span className="text-xs text-text-secondary tabular-nums">{children}</span>
     </div>
   );
 }
@@ -36,7 +41,7 @@ export default function PropertyPanel() {
 
   if (!selectedRoom || !activeFloor) {
     return (
-      <aside className="w-56 bg-surface-0 border-l border-border-default shrink-0 flex items-center justify-center">
+      <aside className="w-52 bg-surface-0 border-l border-border-default shrink-0 flex items-center justify-center">
         <p className="text-[11px] text-text-disabled text-center px-4 leading-relaxed">
           방을 클릭하면<br />속성이 표시됩니다
         </p>
@@ -47,28 +52,30 @@ export default function PropertyPanel() {
   const openings = selectedRoom.openings ?? [];
 
   return (
-    <aside className="w-56 bg-surface-0 border-l border-border-default shrink-0 flex flex-col overflow-y-auto">
+    <aside className="w-52 bg-surface-0 border-l border-border-default shrink-0 flex flex-col overflow-y-auto">
+
       {/* Header */}
-      <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-border-subtle">
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
         <SectionLabel>방 속성</SectionLabel>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => selectRoom(null)}
-          className="text-[11px] text-text-muted hover:text-text-primary transition-colors duration-75 leading-none"
           aria-label="닫기"
+          className="h-5 w-5"
         >
-          ✕
-        </button>
+          <X size={12} strokeWidth={2} />
+        </Button>
       </div>
 
+      <Separator />
+
       <div className="p-3 space-y-4">
+
         {/* Name */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label className="text-[11px] text-text-muted">이름</label>
-          <input
-            className="w-full px-2.5 py-1.5 text-sm border border-border-default rounded-md
-                       bg-surface-3 text-text-primary placeholder:text-text-disabled
-                       focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15
-                       transition-colors duration-75"
+          <Input
             value={selectedRoom.roomName}
             onChange={e =>
               updateRoom(activeFloor.floorId, selectedRoom.roomId, { roomName: e.target.value })
@@ -76,26 +83,20 @@ export default function PropertyPanel() {
           />
         </div>
 
-        {/* Area */}
-        <PropertyRow label="면적">
-          <span className="text-text-secondary">
+        {/* Metrics */}
+        <div className="rounded-md bg-surface-2 border border-border-subtle px-2.5 py-1.5 space-y-0.5">
+          <PropertyRow label="면적">
             {selectedRoom.area > 0 ? `${selectedRoom.area.toFixed(1)} px²` : "—"}
-          </span>
-        </PropertyRow>
-
-        {/* Vertex count */}
-        <PropertyRow label="꼭짓점">
-          <span className="text-text-secondary">{selectedRoom.roomPolygon.length}개</span>
-        </PropertyRow>
-
-        {/* Shared boundaries */}
-        <PropertyRow label="공유 경계">
-          <span className="text-text-secondary">
+          </PropertyRow>
+          <PropertyRow label="꼭짓점">
+            {selectedRoom.roomPolygon.length}개
+          </PropertyRow>
+          <PropertyRow label="공유 경계">
             {selectedRoom.sharedBoundaries.length > 0
               ? `${selectedRoom.sharedBoundaries.length}개`
               : "없음"}
-          </span>
-        </PropertyRow>
+          </PropertyRow>
+        </div>
 
         {/* Openings */}
         {openings.length > 0 && (
@@ -108,16 +109,18 @@ export default function PropertyPanel() {
                   className="flex items-center justify-between px-2.5 py-1.5 rounded-md
                              bg-accent-subtle border border-accent/10"
                 >
-                  <span className="text-xs font-medium text-accent-text">
+                  <Badge variant="default">
                     {OPENING_LABELS[op.type] ?? op.type}
-                  </span>
-                  <button
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => removeOpening(activeFloor.floorId, selectedRoom.roomId, op.id)}
-                    className="text-[11px] text-text-muted hover:text-destructive transition-colors duration-75 ml-1"
                     aria-label="제거"
+                    className="h-5 w-5 hover:text-destructive"
                   >
-                    ✕
-                  </button>
+                    <X size={10} strokeWidth={2} />
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -126,18 +129,20 @@ export default function PropertyPanel() {
       </div>
 
       {/* Delete room — pinned to bottom */}
-      <div className="mt-auto p-3 border-t border-border-subtle">
-        <button
+      <div className="mt-auto p-3 pt-0">
+        <Separator className="mb-3" />
+        <Button
+          variant="danger"
+          size="sm"
+          className="w-full gap-1.5"
           onClick={() => {
             removeRoom(activeFloor.floorId, selectedRoom.roomId);
             selectRoom(null);
           }}
-          className="w-full text-xs px-2 py-1.5 rounded-md text-destructive
-                     border border-destructive/20 hover:bg-destructive-bg
-                     transition-colors duration-75"
         >
+          <Trash2 size={11} strokeWidth={1.8} />
           방 삭제
-        </button>
+        </Button>
       </div>
     </aside>
   );
