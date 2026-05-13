@@ -7,39 +7,33 @@ import FloorSidebar from "@/components/organisms/FloorSidebar";
 import PropertyPanel from "@/components/organisms/PropertyPanel";
 import { useEditorStore } from "@/store/editorStore";
 
-const Canvas2D = dynamic(() => import("@/components/editor/Canvas2D"), { ssr: false });
-const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
+const Canvas2D   = dynamic(() => import("@/components/editor/Canvas2D"),   { ssr: false });
+const Viewer25D  = dynamic(() => import("@/components/viewer/Viewer25D"),  { ssr: false });
 
 type ViewMode = "edit" | "preview";
 
 export default function EditorPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>("edit");
+  const [viewMode, setViewMode]     = useState<ViewMode>("edit");
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef(null);
+  const canvasContainerRef          = useRef<HTMLDivElement>(null);
+  const stageRef                    = useRef(null);
 
-  const floors = useEditorStore(s => s.project.floors);
-  const activeFloorId = useEditorStore(s => s.project.viewState.activeFloorId);
-  const exportJSON = useEditorStore(s => s.exportJSON);
+  const floors         = useEditorStore(s => s.project.floors);
+  const activeFloorId  = useEditorStore(s => s.project.viewState.activeFloorId);
+  const exportJSON     = useEditorStore(s => s.exportJSON);
   const loadFromLocalStorage = useEditorStore(s => s.loadFromLocalStorage);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    loadFromLocalStorage();
-  }, [loadFromLocalStorage]);
+  useEffect(() => { loadFromLocalStorage(); }, [loadFromLocalStorage]);
 
-  // Measure canvas container
   useEffect(() => {
     const el = canvasContainerRef.current;
     if (!el) return;
     const obs = new ResizeObserver(entries => {
       const entry = entries[0];
-      if (entry) {
-        setCanvasSize({
-          width: Math.floor(entry.contentRect.width),
-          height: Math.floor(entry.contentRect.height),
-        });
-      }
+      if (entry) setCanvasSize({
+        width:  Math.floor(entry.contentRect.width),
+        height: Math.floor(entry.contentRect.height),
+      });
     });
     obs.observe(el);
     return () => obs.disconnect();
@@ -48,36 +42,44 @@ export default function EditorPage() {
   const handleExportPNG = useCallback(() => {
     if (!stageRef.current) return;
     const stage = stageRef.current as { toDataURL: (opts: object) => string };
-    const url = stage.toDataURL({ pixelRatio: 2 });
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "floor-guide.png";
+    const url   = stage.toDataURL({ pixelRatio: 2 });
+    const a     = document.createElement("a");
+    a.href      = url;
+    a.download  = "floor-guide.png";
     a.click();
   }, []);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden bg-surface-2">
       <Toolbar />
 
-      {/* Mode switcher */}
-      <div className="flex items-center gap-2 px-4 py-1.5 bg-[#f2f1ed] border-b border-[#e0ddd7]">
-        <button
-          onClick={() => setViewMode("edit")}
-          className={`text-sm px-3 py-1 rounded ${viewMode === "edit" ? "bg-[#4a7c6f] text-white" : "text-[#6b6b65] hover:bg-[#eeeae3]"}`}
-        >
-          2D 편집
-        </button>
-        <button
-          onClick={() => setViewMode("preview")}
-          className={`text-sm px-3 py-1 rounded ${viewMode === "preview" ? "bg-[#4a7c6f] text-white" : "text-[#6b6b65] hover:bg-[#eeeae3]"}`}
-        >
-          2.5D 미리보기
-        </button>
-        <div className="ml-auto flex items-center gap-2">
+      {/* Mode bar */}
+      <div className="flex items-center gap-1 px-3 h-9 bg-surface-2 border-b border-border-default shrink-0">
+        {/* Mode tabs */}
+        <div className="flex items-center gap-0.5 bg-surface-3 rounded-md p-0.5">
+          {(["edit", "preview"] as ViewMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={[
+                "px-3 py-0.5 rounded text-xs font-medium transition-colors duration-100",
+                viewMode === mode
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-primary",
+              ].join(" ")}
+            >
+              {mode === "edit" ? "2D 편집" : "2.5D 미리보기"}
+            </button>
+          ))}
+        </div>
+
+        {/* Secondary actions */}
+        <div className="ml-auto flex items-center gap-1">
           {viewMode === "edit" && (
             <button
               onClick={handleExportPNG}
-              className="text-sm px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
+              className="text-xs px-2.5 py-1 rounded-md text-text-secondary hover:bg-surface-3
+                         hover:text-text-primary transition-colors duration-75"
             >
               2D PNG 저장
             </button>
@@ -86,20 +88,23 @@ export default function EditorPage() {
             href="/view"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
-            onClick={() => {
-              useEditorStore.getState().saveToLocalStorage();
-            }}
+            className="text-xs px-2.5 py-1 rounded-md text-text-secondary hover:bg-surface-3
+                       hover:text-text-primary transition-colors duration-75"
+            onClick={() => useEditorStore.getState().saveToLocalStorage()}
           >
             뷰어로 공유 ↗
           </a>
         </div>
       </div>
 
+      {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
         <FloorSidebar />
 
-        <main ref={canvasContainerRef} className="flex-1 overflow-hidden relative bg-[#f2f1ed]">
+        <main
+          ref={canvasContainerRef}
+          className="flex-1 overflow-hidden relative bg-surface-2"
+        >
           {viewMode === "edit" ? (
             <Canvas2D
               width={canvasSize.width}
