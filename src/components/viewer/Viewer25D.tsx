@@ -6,20 +6,15 @@ import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
 
-const FLOOR_COLORS = ["#d4c9b8", "#c8bfae", "#bcb59e", "#b0ab8e", "#a4a17e"];
-const WALL_COLOR = "#9a9690";
+// Visual direction palette — warm neutrals, low saturation
+const FLOOR_COLORS = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
+const WALL_COLOR    = "#B8B3AC";   // primary matte wall face
+const WALL_DARK     = "#A8A39C";   // shadow/side face (used via directional light)
 const WALL_HEIGHT_SCALE = 0.3;
 
 // Camera [8,8,8]: polar angle from Y-axis = acos(8 / sqrt(8²+8²+8²)) = acos(1/√3)
 // Locking min===max prevents vertical tilting; only horizontal orbit allowed.
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
-
-const OPENING_COLORS: Record<string, string> = {
-  door: "#4a7c6f",
-  window: "#5599cc",
-  stair: "#888860",
-  elevator: "#888",
-};
 
 // Coordinate mapping:
 //   polygonToShape uses (canvasX/100, -canvasY/100) in shape XY plane.
@@ -57,28 +52,171 @@ function computeSceneCenter(floors: EditorFloor[]): { x: number; z: number } {
   return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
 }
 
+// ── Floor-plan opening symbols ────────────────────────────────────────────
+// All symbols lie flat on the floor: rotation={[-PI/2, 0, 0]}
+// y = 0.025 puts them just above the floor plane (floor plane at y=0.01)
+
+// Door — thin panel rectangle + arc sweep sector (architectural floor plan symbol)
+function DoorSymbol3D({ x, z }: { x: number; z: number }) {
+  const r = 0.18, ri = 0.155, t = 0.022;
+
+  const panelShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(0, -t / 2); s.lineTo(r, -t / 2);
+    s.lineTo(r,  t / 2); s.lineTo(0,  t / 2);
+    s.closePath();
+    return s;
+  }, []);
+
+  const arcShape = useMemo(() => {
+    // Annular sector: outer radius r, inner radius ri, 0–90°
+    const s = new THREE.Shape();
+    s.moveTo(ri, 0);
+    s.lineTo(r, 0);
+    s.absarc(0, 0, r,  0,           Math.PI / 2, false);
+    s.lineTo(0, ri);
+    s.absarc(0, 0, ri, Math.PI / 2, 0,           true);
+    s.closePath();
+    return s;
+  }, []);
+
+  return (
+    <group position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh><shapeGeometry args={[panelShape]} /><meshLambertMaterial color="#5E8A7C" side={THREE.DoubleSide} /></mesh>
+      <mesh><shapeGeometry args={[arcShape]}  /><meshLambertMaterial color="#5E8A7C" transparent opacity={0.38} side={THREE.DoubleSide} /></mesh>
+    </group>
+  );
+}
+
+// Window — elongated frame + center divider (glass pane plan symbol)
+function WindowSymbol3D({ x, z }: { x: number; z: number }) {
+  const w = 0.24, h = 0.07, ft = 0.013, lt = 0.010;
+
+  const frameShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(-w / 2, -h / 2); s.lineTo(w / 2, -h / 2);
+    s.lineTo( w / 2,  h / 2); s.lineTo(-w / 2, h / 2);
+    s.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-w / 2 + ft, -h / 2 + ft); hole.lineTo(w / 2 - ft, -h / 2 + ft);
+    hole.lineTo( w / 2 - ft,  h / 2 - ft); hole.lineTo(-w / 2 + ft, h / 2 - ft);
+    hole.closePath();
+    s.holes.push(hole);
+    return s;
+  }, []);
+
+  const dividerShape = useMemo(() => {
+    const s = new THREE.Shape();
+    s.moveTo(-w / 2 + ft, -lt / 2); s.lineTo(w / 2 - ft, -lt / 2);
+    s.lineTo( w / 2 - ft,  lt / 2); s.lineTo(-w / 2 + ft, lt / 2);
+    s.closePath();
+    return s;
+  }, []);
+
+  return (
+    <group position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh><shapeGeometry args={[frameShape]}   /><meshLambertMaterial color="#7A9EB5" side={THREE.DoubleSide} /></mesh>
+      <mesh><shapeGeometry args={[dividerShape]} /><meshLambertMaterial color="#7A9EB5" side={THREE.DoubleSide} /></mesh>
+    </group>
+  );
+}
+
+// Stair — frame + horizontal step lines
+function StairSymbol3D({ x, z }: { x: number; z: number }) {
+  const w = 0.20, h = 0.22, ft = 0.013, lt = 0.010, steps = 4;
+
+  const shapes = useMemo(() => {
+    const result: THREE.Shape[] = [];
+
+    const frame = new THREE.Shape();
+    frame.moveTo(-w / 2, -h / 2); frame.lineTo(w / 2, -h / 2);
+    frame.lineTo( w / 2,  h / 2); frame.lineTo(-w / 2, h / 2);
+    frame.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-w / 2 + ft, -h / 2 + ft); hole.lineTo(w / 2 - ft, -h / 2 + ft);
+    hole.lineTo( w / 2 - ft,  h / 2 - ft); hole.lineTo(-w / 2 + ft, h / 2 - ft);
+    hole.closePath();
+    frame.holes.push(hole);
+    result.push(frame);
+
+    const innerH = h - 2 * ft;
+    const stepH  = innerH / steps;
+    for (let i = 1; i < steps; i++) {
+      const y = -h / 2 + ft + i * stepH;
+      const line = new THREE.Shape();
+      line.moveTo(-w / 2 + ft, y - lt / 2); line.lineTo(w / 2 - ft, y - lt / 2);
+      line.lineTo( w / 2 - ft, y + lt / 2); line.lineTo(-w / 2 + ft, y + lt / 2);
+      line.closePath();
+      result.push(line);
+    }
+    return result;
+  }, []);
+
+  return (
+    <group position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      {shapes.map((shape, i) => (
+        <mesh key={i}><shapeGeometry args={[shape]} /><meshLambertMaterial color="#9A9578" side={THREE.DoubleSide} /></mesh>
+      ))}
+    </group>
+  );
+}
+
+// Elevator — square frame + up/down arrow triangles
+function ElevatorSymbol3D({ x, z }: { x: number; z: number }) {
+  const s = 0.20, ft = 0.013, at = 0.042;
+
+  const shapes = useMemo(() => {
+    const result: THREE.Shape[] = [];
+
+    const frame = new THREE.Shape();
+    frame.moveTo(-s / 2, -s / 2); frame.lineTo(s / 2, -s / 2);
+    frame.lineTo( s / 2,  s / 2); frame.lineTo(-s / 2, s / 2);
+    frame.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-s / 2 + ft, -s / 2 + ft); hole.lineTo(s / 2 - ft, -s / 2 + ft);
+    hole.lineTo( s / 2 - ft,  s / 2 - ft); hole.lineTo(-s / 2 + ft, s / 2 - ft);
+    hole.closePath();
+    frame.holes.push(hole);
+    result.push(frame);
+
+    // Up arrow (upper half)
+    const up = new THREE.Shape();
+    up.moveTo(-at, 0.018); up.lineTo(0, 0.018 + at * 1.1); up.lineTo(at, 0.018);
+    up.closePath();
+    result.push(up);
+
+    // Down arrow (lower half)
+    const down = new THREE.Shape();
+    down.moveTo(-at, -0.018); down.lineTo(0, -0.018 - at * 1.1); down.lineTo(at, -0.018);
+    down.closePath();
+    result.push(down);
+
+    return result;
+  }, []);
+
+  return (
+    <group position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      {shapes.map((shape, i) => (
+        <mesh key={i}><shapeGeometry args={[shape]} /><meshLambertMaterial color="#8A8A8A" side={THREE.DoubleSide} /></mesh>
+      ))}
+    </group>
+  );
+}
+
 interface OpeningMarkerProps {
   opening: RoomOpening;
   floorY: number;
 }
 
-function OpeningMarker({ opening, floorY }: OpeningMarkerProps) {
-  const color = OPENING_COLORS[opening.type] ?? "#888";
+function OpeningMarker({ opening }: OpeningMarkerProps) {
   const x = opening.x / 100;
-  const z = opening.y / 100;   // world Z = canvasY / 100 (no negation)
-  const y = floorY * WALL_HEIGHT_SCALE + 0.03;
+  const z = opening.y / 100;  // world Z = canvasY / 100 (no negation)
+  // floorY is always 0 here — offset already applied by parent RoomMesh group
 
-  const size =
-    opening.type === "door" ? 0.16 :
-    opening.type === "window" ? 0.2 :
-    opening.type === "stair" ? 0.18 : 0.16;
-
-  return (
-    <mesh position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <circleGeometry args={[size, 16]} />
-      <meshLambertMaterial color={color} side={THREE.DoubleSide} />
-    </mesh>
-  );
+  if (opening.type === "door")     return <DoorSymbol3D     x={x} z={z} />;
+  if (opening.type === "window")   return <WindowSymbol3D   x={x} z={z} />;
+  if (opening.type === "stair")    return <StairSymbol3D    x={x} z={z} />;
+  return                                  <ElevatorSymbol3D x={x} z={z} />;
 }
 
 interface RoomMeshProps {
@@ -160,11 +298,11 @@ function ScreenshotButton() {
         style={{
           padding: "4px 10px",
           fontSize: "12px",
-          background: "#f0efeb",
-          border: "1px solid #d4d4c8",
-          borderRadius: "4px",
+          background: "#F2F1ED",
+          border: "1px solid #E0DDD7",
+          borderRadius: "6px",
           cursor: "pointer",
-          color: "#555548",
+          color: "#6B6B65",
           whiteSpace: "nowrap",
         }}
       >
@@ -190,7 +328,7 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
   });
 
   return (
-    <div className="w-full h-full bg-[#f0efeb]">
+    <div className="w-full h-full bg-[#F7F6F2]">
       <Canvas
         camera={{ position: [8, 8, 8], fov: 38 }}
         shadows
@@ -234,7 +372,7 @@ export default function Viewer25D({ floors, activeFloorId }: Props) {
           maxPolarAngle={FIXED_POLAR}
           target={[0, 0, 0]}
         />
-        <gridHelper args={[30, 30, "#ccc", "#eee"]} position={[0, -0.01, 0]} />
+        <gridHelper args={[30, 30, "#DEDAD3", "#EEEAE3"]} position={[0, -0.01, 0]} />
         <ScreenshotButton />
       </Canvas>
     </div>
