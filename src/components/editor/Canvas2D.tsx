@@ -8,13 +8,13 @@ import { useEditorStore, useActiveFloor } from "@/store/editorStore";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { RoomOpeningType, EditorPoint } from "@/domain/editor-state";
 
-const ROOM_FILL = "#e8e8e0";
-const ROOM_FILL_SELECTED = "#d4ede8";
-const ROOM_STROKE = "#888878";
-const ROOM_STROKE_SELECTED = "#4a7c6f";
-const DRAFT_COLOR = "#4a7c6f";
-const VERTEX_FILL = "#fff";
-const VERTEX_STROKE = "#4a7c6f";
+const ROOM_FILL          = "#DDD8CF";   // warm beige — floor 1F tone
+const ROOM_FILL_SELECTED = "#EBF3F0";   // teal tint on selection
+const ROOM_STROKE        = "#B8B2A8";   // muted warm gray outline
+const ROOM_STROKE_SELECTED = "#4A7C6F"; // brand teal
+const DRAFT_COLOR        = "#4A7C6F";
+const VERTEX_FILL        = "#FFFFFF";
+const VERTEX_STROKE      = "#4A7C6F";
 
 function useRefImage(src: string | null): HTMLImageElement | null {
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -117,17 +117,37 @@ function OpeningSymbol({ type, x, y, alpha = 1 }: { type: RoomOpeningType; x: nu
 // ---- Empty canvas hint ----
 
 function EmptyHint({ width, height }: { width: number; height: number }) {
+  const cx = width / 2;
+  const cy = height / 2;
   return (
     <Group listening={false}>
-      <Text
-        x={0} y={height / 2 - 30} width={width}
-        text="'방' 도구를 선택하고 캔버스를 클릭해 방을 그려보세요"
-        fontSize={14} fill="#bbb" align="center"
+      {/* Icon placeholder — rounded square */}
+      <Rect
+        x={cx - 20} y={cy - 52}
+        width={40} height={40}
+        fill="#EEEAE3" cornerRadius={8}
       />
       <Text
-        x={0} y={height / 2 - 8} width={width}
-        text="점 3개 이상 → Enter 또는 더블클릭으로 완성"
-        fontSize={12} fill="#ccc" align="center"
+        x={cx - 20} y={cy - 44}
+        width={40} height={24}
+        text="▭"
+        fontSize={18} fill="#C4C4BE" align="center" verticalAlign="middle"
+      />
+      {/* Primary message */}
+      <Text
+        x={0} y={cy}
+        width={width}
+        text="'방' 도구를 선택하고 캔버스를 클릭해 시작하세요"
+        fontSize={14} fill="#A8A8A2" align="center"
+        fontFamily="Pretendard, -apple-system, sans-serif"
+      />
+      {/* Secondary hint */}
+      <Text
+        x={0} y={cy + 22}
+        width={width}
+        text="점 3개 이상 찍은 뒤 Enter 또는 더블클릭으로 방을 완성합니다"
+        fontSize={11} fill="#C4C4BE" align="center"
+        fontFamily="Pretendard, -apple-system, sans-serif"
       />
     </Group>
   );
@@ -237,7 +257,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
     >
       <Layer>
         {/* Background */}
-        <Rect x={0} y={0} width={width} height={height} fill="#fafaf8" />
+        <Rect x={0} y={0} width={width} height={height} fill="#F7F6F2" />
 
         {/* Empty state hint */}
         {!hasRooms && !isDrawing && <EmptyHint width={width} height={height} />}
