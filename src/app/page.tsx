@@ -60,16 +60,16 @@ export default function EditorPage() {
       <Toolbar />
 
       {/* Mode switcher */}
-      <div className="flex items-center gap-2 px-4 py-1.5 bg-[#f5f5f0] border-b border-[#d4d4c8]">
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-[#f2f1ed] border-b border-[#e0ddd7]">
         <button
           onClick={() => setViewMode("edit")}
-          className={`text-sm px-3 py-1 rounded ${viewMode === "edit" ? "bg-[#4a7c6f] text-white" : "text-[#555548] hover:bg-[#e8e8e0]"}`}
+          className={`text-sm px-3 py-1 rounded ${viewMode === "edit" ? "bg-[#4a7c6f] text-white" : "text-[#6b6b65] hover:bg-[#eeeae3]"}`}
         >
           2D 편집
         </button>
         <button
           onClick={() => setViewMode("preview")}
-          className={`text-sm px-3 py-1 rounded ${viewMode === "preview" ? "bg-[#4a7c6f] text-white" : "text-[#555548] hover:bg-[#e8e8e0]"}`}
+          className={`text-sm px-3 py-1 rounded ${viewMode === "preview" ? "bg-[#4a7c6f] text-white" : "text-[#6b6b65] hover:bg-[#eeeae3]"}`}
         >
           2.5D 미리보기
         </button>
@@ -77,7 +77,7 @@ export default function EditorPage() {
           {viewMode === "edit" && (
             <button
               onClick={handleExportPNG}
-              className="text-sm px-3 py-1 bg-[#f0efeb] hover:bg-[#e8e8e0] rounded text-[#555548]"
+              className="text-sm px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
             >
               2D PNG 저장
             </button>
@@ -86,7 +86,7 @@ export default function EditorPage() {
             href="/view"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm px-3 py-1 bg-[#f0efeb] hover:bg-[#e8e8e0] rounded text-[#555548]"
+            className="text-sm px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
             onClick={() => {
               useEditorStore.getState().saveToLocalStorage();
             }}
@@ -99,7 +99,7 @@ export default function EditorPage() {
       <div className="flex flex-1 overflow-hidden">
         <FloorSidebar />
 
-        <main ref={canvasContainerRef} className="flex-1 overflow-hidden relative bg-[#f5f5f0]">
+        <main ref={canvasContainerRef} className="flex-1 overflow-hidden relative bg-[#f2f1ed]">
           {viewMode === "edit" ? (
             <Canvas2D
               width={canvasSize.width}

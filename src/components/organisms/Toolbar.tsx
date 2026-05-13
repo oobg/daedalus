@@ -21,7 +21,7 @@ export default function Toolbar() {
   const cancelDraft = useEditorStore(s => s.cancelDraft);
 
   return (
-    <div className="flex items-center gap-1 px-3 py-2 bg-white border-b border-[#d4d4c8] select-none">
+    <div className="flex items-center gap-1 px-3 py-2 bg-white border-b border-[#e0ddd7] select-none">
       <span className="text-sm font-semibold text-[#4a7c6f] mr-3">Space Raven</span>
 
       {TOOLS.map(tool => (
@@ -31,7 +31,7 @@ export default function Toolbar() {
           className={`px-3 py-1.5 rounded text-sm transition-colors ${
             activeTool === tool.id
               ? "bg-[#4a7c6f] text-white"
-              : "bg-transparent text-[#555548] hover:bg-[#f0efeb]"
+              : "bg-transparent text-[#6b6b65] hover:bg-[#f2f1ed]"
           }`}
           title={tool.label}
         >
@@ -41,8 +41,8 @@ export default function Toolbar() {
       ))}
 
       {isDrawing && (
-        <div className="ml-auto flex items-center gap-2 text-sm text-[#555548]">
-          <span className="text-[#888880]">점 {draftPoints.length}개 찍힘 — Enter로 완료, Esc로 취소</span>
+        <div className="ml-auto flex items-center gap-2 text-sm text-[#6b6b65]">
+          <span className="text-[#a8a8a2]">점 {draftPoints.length}개 찍힘 — Enter로 완료, Esc로 취소</span>
           {draftPoints.length >= 3 && (
             <button
               onClick={commitDraft}
@@ -53,7 +53,7 @@ export default function Toolbar() {
           )}
           <button
             onClick={cancelDraft}
-            className="px-3 py-1 bg-[#e8e8e0] text-[#555548] rounded text-sm"
+            className="px-3 py-1 bg-[#eeeae3] text-[#6b6b65] rounded text-sm"
           >
             취소
           </button>

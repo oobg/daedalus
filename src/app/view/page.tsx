@@ -60,10 +60,10 @@ export default function ViewPage() {
 
   if (!project) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#f5f5f0] gap-6">
+      <div className="flex flex-col items-center justify-center h-screen bg-[#f2f1ed] gap-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-[#333] mb-2">Space Raven 뷰어</h1>
-          <p className="text-sm text-[#888880]">JSON 파일을 불러오거나, 편집기에서 '뷰어로 공유'를 통해 접근하세요.</p>
+          <p className="text-sm text-[#a8a8a2]">JSON 파일을 불러오거나, 편집기에서 '뷰어로 공유'를 통해 접근하세요.</p>
         </div>
 
         {error && (
@@ -83,21 +83,21 @@ export default function ViewPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#f5f5f0]">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#f2f1ed]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#d4d4c8] shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#e0ddd7] shrink-0">
         <span className="text-sm font-semibold text-[#4a7c6f]">Space Raven — 읽기 전용 뷰어</span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#888880]">{project.floors.length}개 층</span>
+          <span className="text-xs text-[#a8a8a2]">{project.floors.length}개 층</span>
           <button
             onClick={() => fileRef.current?.click()}
-            className="text-xs px-3 py-1 bg-[#f0efeb] hover:bg-[#e8e8e0] rounded text-[#555548]"
+            className="text-xs px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
           >
             다른 파일 열기
           </button>
           <button
             onClick={() => setProject(null)}
-            className="text-xs px-3 py-1 bg-[#f0efeb] hover:bg-[#e8e8e0] rounded text-[#555548]"
+            className="text-xs px-3 py-1 bg-[#f2f1ed] hover:bg-[#eeeae3] rounded text-[#6b6b65]"
           >
             닫기
           </button>
@@ -105,7 +105,7 @@ export default function ViewPage() {
       </div>
 
       {/* Floor legend */}
-      <div className="flex items-center gap-3 px-4 py-1.5 bg-[#f5f5f0] border-b border-[#d4d4c8] text-xs text-[#888880] shrink-0 overflow-x-auto">
+      <div className="flex items-center gap-3 px-4 py-1.5 bg-[#f2f1ed] border-b border-[#e0ddd7] text-xs text-[#a8a8a2] shrink-0 overflow-x-auto">
         {[...project.floors].reverse().map(floor => (
           <span key={floor.floorId} className="whitespace-nowrap">
             {floor.floorName}
