@@ -1,9 +1,9 @@
 "use client";
 
 // Canvas2D is loaded via dynamic({ ssr: false }) from page.tsx,
-// so direct react-konva imports are safe here — no SSR will run this module.
+// so direct react-konva imports are safe — no SSR will run this module.
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image, Group } from "react-konva";
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import { useEditorStore, useActiveFloor } from "@/store/editorStore";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { RoomOpeningType, EditorPoint } from "@/domain/editor-state";
@@ -45,10 +45,10 @@ function pointInPolygon(pt: EditorPoint, poly: EditorPoint[]): boolean {
 
 // ---- Opening symbol renderers ----
 
-function DoorSymbol({ x, y }: { x: number; y: number }) {
+function DoorSymbol({ x, y, alpha = 1 }: { x: number; y: number; alpha?: number }) {
   const r = 14;
   return (
-    <Group x={x} y={y}>
+    <Group x={x} y={y} opacity={alpha}>
       <Line points={[-r, 0, -r, -4]} stroke="#555" strokeWidth={2} />
       <Line points={[-r, 0, 0, 0]} stroke="#4a7c6f" strokeWidth={2} />
       <Arc
@@ -60,29 +60,29 @@ function DoorSymbol({ x, y }: { x: number; y: number }) {
         y={0}
         stroke="#4a7c6f"
         strokeWidth={1.5}
-        fill="rgba(74,124,111,0.1)"
+        fill="rgba(74,124,111,0.12)"
       />
     </Group>
   );
 }
 
-function WindowSymbol({ x, y }: { x: number; y: number }) {
+function WindowSymbol({ x, y, alpha = 1 }: { x: number; y: number; alpha?: number }) {
   const w = 20;
   return (
-    <Group x={x} y={y}>
+    <Group x={x} y={y} opacity={alpha}>
       <Rect x={-w / 2} y={-4} width={w} height={8} fill="#cce8f4" stroke="#5599cc" strokeWidth={1.5} />
       <Line points={[-w / 2, 0, w / 2, 0]} stroke="#5599cc" strokeWidth={1} />
     </Group>
   );
 }
 
-function StairSymbol({ x, y }: { x: number; y: number }) {
+function StairSymbol({ x, y, alpha = 1 }: { x: number; y: number; alpha?: number }) {
   const steps = 4;
   const totalH = 20;
   const w = 16;
   const stepH = totalH / steps;
   return (
-    <Group x={x} y={y}>
+    <Group x={x} y={y} opacity={alpha}>
       <Rect x={-w / 2} y={-totalH / 2} width={w} height={totalH} fill="#f0efeb" stroke="#888" strokeWidth={1} />
       {Array.from({ length: steps + 1 }, (_, i) => (
         <Line
@@ -97,21 +97,21 @@ function StairSymbol({ x, y }: { x: number; y: number }) {
   );
 }
 
-function ElevatorSymbol({ x, y }: { x: number; y: number }) {
+function ElevatorSymbol({ x, y, alpha = 1 }: { x: number; y: number; alpha?: number }) {
   const s = 20;
   return (
-    <Group x={x} y={y}>
+    <Group x={x} y={y} opacity={alpha}>
       <Rect x={-s / 2} y={-s / 2} width={s} height={s} fill="#e8e8e0" stroke="#888" strokeWidth={1.5} />
       <Text text="⊟" x={-s / 2 + 2} y={-s / 2 + 2} fontSize={14} fill="#444" />
     </Group>
   );
 }
 
-function OpeningSymbol({ type, x, y }: { type: RoomOpeningType; x: number; y: number }) {
-  if (type === "door") return <DoorSymbol x={x} y={y} />;
-  if (type === "window") return <WindowSymbol x={x} y={y} />;
-  if (type === "stair") return <StairSymbol x={x} y={y} />;
-  return <ElevatorSymbol x={x} y={y} />;
+function OpeningSymbol({ type, x, y, alpha = 1 }: { type: RoomOpeningType; x: number; y: number; alpha?: number }) {
+  if (type === "door") return <DoorSymbol x={x} y={y} alpha={alpha} />;
+  if (type === "window") return <WindowSymbol x={x} y={y} alpha={alpha} />;
+  if (type === "stair") return <StairSymbol x={x} y={y} alpha={alpha} />;
+  return <ElevatorSymbol x={x} y={y} alpha={alpha} />;
 }
 
 // ---- Empty canvas hint ----
@@ -120,22 +120,14 @@ function EmptyHint({ width, height }: { width: number; height: number }) {
   return (
     <Group listening={false}>
       <Text
-        x={0}
-        y={height / 2 - 30}
-        width={width}
+        x={0} y={height / 2 - 30} width={width}
         text="'방' 도구를 선택하고 캔버스를 클릭해 방을 그려보세요"
-        fontSize={14}
-        fill="#aaa"
-        align="center"
+        fontSize={14} fill="#bbb" align="center"
       />
       <Text
-        x={0}
-        y={height / 2 - 10}
-        width={width}
-        text="3개 이상 점을 찍은 후 Enter 또는 더블클릭으로 완성"
-        fontSize={12}
-        fill="#ccc"
-        align="center"
+        x={0} y={height / 2 - 8} width={width}
+        text="점 3개 이상 → Enter 또는 더블클릭으로 완성"
+        fontSize={12} fill="#ccc" align="center"
       />
     </Group>
   );
@@ -165,8 +157,31 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   const floor = useActiveFloor();
   const refImage = useRefImage(floor?.referenceImage ?? null);
 
-  const isOpeningTool = (t: typeof activeTool): t is RoomOpeningType =>
-    t === "door" || t === "window" || t === "stair" || t === "elevator";
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+  const isOpeningActive =
+    activeTool === "door" || activeTool === "window" ||
+    activeTool === "stair" || activeTool === "elevator";
+
+  // Find which room (if any) the cursor is currently over
+  const hoverRoomId = useMemo(() => {
+    if (!hoverPos || !floor || !isOpeningActive) return null;
+    return floor.rooms.find(r => pointInPolygon(hoverPos, r.roomPolygon))?.roomId ?? null;
+  }, [hoverPos, floor, isOpeningActive]);
+
+  const cursor =
+    activeTool === "room" ? "crosshair" :
+    isOpeningActive ? (hoverRoomId ? "crosshair" : "not-allowed") :
+    "default";
+
+  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
+    if (!isOpeningActive) { setHoverPos(null); return; }
+    const stage = e.target.getStage();
+    const pos = stage?.getPointerPosition();
+    if (pos) setHoverPos({ x: pos.x, y: pos.y });
+  }, [isOpeningActive]);
+
+  const handleMouseLeave = useCallback(() => setHoverPos(null), []);
 
   const handleStageClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
@@ -181,19 +196,18 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
     }
 
     if (activeTool === "select") {
-      // clicked empty area — deselect
       selectRoom(null);
       return;
     }
 
-    if (isOpeningTool(activeTool) && activeFloorId && floor) {
+    if (isOpeningActive && activeFloorId && floor) {
       const pt = { x: pos.x, y: pos.y };
       const target = floor.rooms.find(r => pointInPolygon(pt, r.roomPolygon));
       if (target) {
-        addOpening(activeFloorId, target.roomId, activeTool, pos.x, pos.y);
+        addOpening(activeFloorId, target.roomId, activeTool as RoomOpeningType, pos.x, pos.y);
       }
     }
-  }, [activeTool, draftPoints.length, addDraftPoint, commitDraft, activeFloorId, floor, addOpening, selectRoom]);
+  }, [activeTool, draftPoints.length, addDraftPoint, commitDraft, activeFloorId, floor, addOpening, selectRoom, isOpeningActive]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") cancelDraft();
@@ -211,16 +225,14 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   const draftFlat = draftPoints.flatMap(p => [p.x, p.y]);
   const selectedRoom = floor.rooms.find(r => r.roomId === selectedRoomId);
 
-  const cursor =
-    activeTool === "room" ? "crosshair" :
-    isOpeningTool(activeTool) ? "cell" : "default";
-
   return (
     <Stage
       ref={stageRef as React.RefObject<never>}
       width={width}
       height={height}
       onClick={handleStageClick}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       style={{ cursor }}
     >
       <Layer>
@@ -228,9 +240,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
         <Rect x={0} y={0} width={width} height={height} fill="#fafaf8" />
 
         {/* Empty state hint */}
-        {!hasRooms && !isDrawing && (
-          <EmptyHint width={width} height={height} />
-        )}
+        {!hasRooms && !isDrawing && <EmptyHint width={width} height={height} />}
 
         {/* Reference image */}
         {refImage && (
@@ -265,9 +275,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
               />
               {lp && (
                 <Text
-                  x={lp.x - 50}
-                  y={lp.y - 8}
-                  width={100}
+                  x={lp.x - 50} y={lp.y - 8} width={100}
                   text={room.roomName}
                   fontSize={12}
                   fill={isSelected ? "#3a6c5f" : "#555548"}
@@ -275,8 +283,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                   listening={false}
                 />
               )}
-
-              {/* Openings */}
+              {/* Placed openings */}
               {(room.openings ?? []).map(op => (
                 <OpeningSymbol key={op.id} type={op.type} x={op.x} y={op.y} />
               ))}
@@ -289,8 +296,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
           selectedRoom.roomPolygon.map((pt, idx) => (
             <Circle
               key={`v-${selectedRoom.roomId}-${idx}`}
-              x={pt.x}
-              y={pt.y}
+              x={pt.x} y={pt.y}
               radius={5}
               fill={VERTEX_FILL}
               stroke={VERTEX_STROKE}
@@ -308,6 +314,16 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
           ))
         }
 
+        {/* Opening placement preview — follows cursor, only shows inside a valid room */}
+        {isOpeningActive && hoverPos && hoverRoomId && (
+          <OpeningSymbol
+            type={activeTool as RoomOpeningType}
+            x={hoverPos.x}
+            y={hoverPos.y}
+            alpha={0.55}
+          />
+        )}
+
         {/* Draft polygon */}
         {isDrawing && draftPoints.length > 0 && (
           <>
@@ -321,14 +337,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
               />
             )}
             {draftPoints.map((p, i) => (
-              <Circle
-                key={i}
-                x={p.x}
-                y={p.y}
-                radius={4}
-                fill={DRAFT_COLOR}
-                listening={false}
-              />
+              <Circle key={i} x={p.x} y={p.y} radius={4} fill={DRAFT_COLOR} listening={false} />
             ))}
           </>
         )}
