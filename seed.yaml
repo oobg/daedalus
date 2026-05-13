@@ -1,0 +1,190 @@
+goal: Build a web-based 2.5D building guide editor for floor-by-floor indoor maps,
+  centered on a stable object-based editor with room-polygon source of truth and read-only
+  viewer/export outputs for practical building guidance use.
+task_type: code
+brownfield_context:
+  project_type: greenfield
+  context_references: []
+  existing_patterns: []
+  existing_dependencies: []
+constraints:
+- Focus on building guide creation, not CAD/BIM-level complexity or free 3D modeling
+- MVP editor source of truth must be editable internal data model, not final render
+  quality
+- Room Polygon is the single source of truth for spatial editing
+- Walls are derived visual elements generated from polygon edges, not primary editable
+  entities
+- Adjacent rooms must logically share boundaries so edits propagate across shared
+  edges
+- Edge edits must preserve attached Door/Window relative positions
+- Edge edits must trigger automatic room area and label recalculation
+- Invalid shape prevention is out of MVP scope
+- MVP storage must use browser localStorage plus JSON file download/upload only
+- Backend, cloud storage, and shareable URL infrastructure are out of MVP scope
+- /view must be a read-only viewer page that can render from local state or uploaded
+  JSON without opening the editor
+- Fixed isometric viewpoint for 2.5D projection
+- Use Next.js App Router, TypeScript strict mode, Tailwind CSS v4, Zustand, Konva.js,
+  React Three Fiber, and Drei
+acceptance_criteria:
+- Users can upload a floor plan image per floor as an editing reference
+- Users can draw and edit Room polygons as the primary spatial objects
+- Shared boundaries between adjacent rooms stay synchronized when a shared edge vertex
+  or segment is edited
+- Doors and windows attached to an edited edge preserve their relative position after
+  edge modification
+- Room area and room label data automatically recalculate after geometry edits
+- Floor height can be configured for each floor
+- The app automatically generates a 2.5D isometric projection from the 2D editor state
+- Supported objects include Wall, Room, Window, Door, Stair, and Elevator
+- Users can save project data to localStorage
+- Users can export and re-import project data as JSON files
+- Users can export final guide output as PNG
+- Users can export final guide output as SVG
+- The app provides a shareable same-app /view route for read-only viewing
+- The /view route can load an uploaded JSON file on another device and render a read-only
+  2.5D guide without the editor
+- Architecture separates editor and renderer concerns and remains extensible for future
+  features
+ontology_schema:
+  name: BuildingGuideFloorModel
+  description: Object-based floor guide model for editing indoor spaces as room polygons
+    with shared boundaries and derived 2.5D guide rendering/output.
+  fields:
+  - name: projectId
+    type: string
+    description: Unique identifier for the building guide project
+    required: true
+  - name: projectName
+    type: string
+    description: Human-readable name of the guide project
+    required: true
+  - name: floors
+    type: array
+    description: Collection of floor definitions in the project
+    required: true
+  - name: floorId
+    type: string
+    description: Unique identifier for a floor
+    required: true
+  - name: floorName
+    type: string
+    description: Display name of the floor
+    required: true
+  - name: floorHeight
+    type: number
+    description: Configured height value used for 2.5D projection
+    required: true
+  - name: referenceImage
+    type: string
+    description: Uploaded floor-plan image reference for editing
+    required: true
+  - name: rooms
+    type: array
+    description: Collection of room polygon objects on a floor
+    required: true
+  - name: roomId
+    type: string
+    description: Unique identifier for a room
+    required: true
+  - name: roomName
+    type: string
+    description: Displayed name or label of the room
+    required: true
+  - name: roomPolygon
+    type: array
+    description: Ordered polygon vertices defining the room shape
+    required: true
+  - name: sharedBoundaries
+    type: array
+    description: Logical references describing boundaries shared with adjacent rooms
+    required: true
+  - name: area
+    type: number
+    description: Calculated room area derived from polygon geometry
+    required: true
+  - name: labelPosition
+    type: object
+    description: Calculated label anchor or placement data for the room
+    required: true
+  - name: walls
+    type: array
+    description: Derived wall segments generated from room polygon edges for visualization
+    required: true
+  - name: openings
+    type: array
+    description: Door and window objects attached to polygon edges
+    required: true
+  - name: openingId
+    type: string
+    description: Unique identifier for a door or window
+    required: true
+  - name: openingType
+    type: string
+    description: Type of attached opening such as door or window
+    required: true
+  - name: attachedEdgeId
+    type: string
+    description: Reference to the boundary edge the opening is attached to
+    required: true
+  - name: edgeRelativePosition
+    type: number
+    description: Normalized relative position of the opening along its attached edge
+    required: true
+  - name: verticalConnectors
+    type: array
+    description: Stair and elevator objects for floor navigation representation
+    required: true
+  - name: objectVersion
+    type: number
+    description: Schema or model version for saved JSON compatibility
+    required: true
+  - name: viewState
+    type: object
+    description: Read-only viewer configuration and rendering metadata
+    required: true
+evaluation_principles:
+- name: data_model_integrity
+  description: The room-polygon source of truth and shared-boundary synchronization
+    must remain consistent under editing operations
+  weight: 0.3
+- name: mvp_scope_discipline
+  description: The implementation must stay within lightweight building-guide scope
+    and avoid CAD/BIM complexity or premature backend features
+  weight: 0.2
+- name: editing_usability
+  description: The editor should enable easy, fast manipulation by general users with
+    clear object-based workflows
+  weight: 0.2
+- name: output_completeness
+  description: MVP must deliver save/load, export, and independent read-only viewer
+    outcomes that are actually usable
+  weight: 0.2
+- name: architectural_extensibility
+  description: Editor-renderer separation and domain structure should support future
+    enhancements without major rework
+  weight: 0.1
+exit_conditions:
+- name: editor_core_complete
+  description: MVP editor is complete when room-polygon editing, shared-boundary updates,
+    opening preservation, and recalculation behaviors all work reliably
+  criteria: All listed geometry-editing acceptance criteria pass
+- name: persistence_complete
+  description: MVP persistence is complete when projects can be saved to localStorage
+    and round-tripped through JSON export/import without data loss
+  criteria: Save-load and JSON import-export flows succeed
+- name: output_complete
+  description: MVP output is complete when PNG export, SVG export, and /view read-only
+    rendering all work from saved or uploaded project data
+  criteria: All three output channels succeed
+- name: scope_boundary_reached
+  description: Workflow should stop once MVP deliverables are met without adding backend,
+    cloud sync, auto-tracing, or invalid-shape blocking
+  criteria: No out-of-scope features required for acceptance
+metadata:
+  seed_id: seed_b529818ea7e2
+  version: 1.0.0
+  created_at: '2026-05-13T02:02:06.335986Z'
+  ambiguity_score: 0.138
+  interview_id: interview_20260513_015046
+  parent_seed_id: null

@@ -1,0 +1,338 @@
+"use client";
+
+// Canvas2D is loaded via dynamic({ ssr: false }) from page.tsx,
+// so direct react-konva imports are safe here — no SSR will run this module.
+import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image, Group } from "react-konva";
+import { useRef, useCallback, useEffect } from "react";
+import { useEditorStore, useActiveFloor } from "@/store/editorStore";
+import type { KonvaEventObject } from "konva/lib/Node";
+import type { RoomOpeningType, EditorPoint } from "@/domain/editor-state";
+
+const ROOM_FILL = "#e8e8e0";
+const ROOM_FILL_SELECTED = "#d4ede8";
+const ROOM_STROKE = "#888878";
+const ROOM_STROKE_SELECTED = "#4a7c6f";
+const DRAFT_COLOR = "#4a7c6f";
+const VERTEX_FILL = "#fff";
+const VERTEX_STROKE = "#4a7c6f";
+
+function useRefImage(src: string | null): HTMLImageElement | null {
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!src) { imgRef.current = null; return; }
+    const img = new window.Image();
+    img.src = src;
+    img.onload = () => { imgRef.current = img; };
+  }, [src]);
+
+  return imgRef.current;
+}
+
+function pointInPolygon(pt: EditorPoint, poly: EditorPoint[]): boolean {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    if ((yi > pt.y) !== (yj > pt.y) &&
+      pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// ---- Opening symbol renderers ----
+
+function DoorSymbol({ x, y }: { x: number; y: number }) {
+  const r = 14;
+  return (
+    <Group x={x} y={y}>
+      <Line points={[-r, 0, -r, -4]} stroke="#555" strokeWidth={2} />
+      <Line points={[-r, 0, 0, 0]} stroke="#4a7c6f" strokeWidth={2} />
+      <Arc
+        innerRadius={0}
+        outerRadius={r}
+        angle={90}
+        rotation={-90}
+        x={-r}
+        y={0}
+        stroke="#4a7c6f"
+        strokeWidth={1.5}
+        fill="rgba(74,124,111,0.1)"
+      />
+    </Group>
+  );
+}
+
+function WindowSymbol({ x, y }: { x: number; y: number }) {
+  const w = 20;
+  return (
+    <Group x={x} y={y}>
+      <Rect x={-w / 2} y={-4} width={w} height={8} fill="#cce8f4" stroke="#5599cc" strokeWidth={1.5} />
+      <Line points={[-w / 2, 0, w / 2, 0]} stroke="#5599cc" strokeWidth={1} />
+    </Group>
+  );
+}
+
+function StairSymbol({ x, y }: { x: number; y: number }) {
+  const steps = 4;
+  const totalH = 20;
+  const w = 16;
+  const stepH = totalH / steps;
+  return (
+    <Group x={x} y={y}>
+      <Rect x={-w / 2} y={-totalH / 2} width={w} height={totalH} fill="#f0efeb" stroke="#888" strokeWidth={1} />
+      {Array.from({ length: steps + 1 }, (_, i) => (
+        <Line
+          key={i}
+          points={[-w / 2, -totalH / 2 + i * stepH, w / 2, -totalH / 2 + i * stepH]}
+          stroke="#555"
+          strokeWidth={0.8}
+        />
+      ))}
+      <Text text="▲" x={-4} y={-totalH / 2 + 2} fontSize={8} fill="#555" />
+    </Group>
+  );
+}
+
+function ElevatorSymbol({ x, y }: { x: number; y: number }) {
+  const s = 20;
+  return (
+    <Group x={x} y={y}>
+      <Rect x={-s / 2} y={-s / 2} width={s} height={s} fill="#e8e8e0" stroke="#888" strokeWidth={1.5} />
+      <Text text="⊟" x={-s / 2 + 2} y={-s / 2 + 2} fontSize={14} fill="#444" />
+    </Group>
+  );
+}
+
+function OpeningSymbol({ type, x, y }: { type: RoomOpeningType; x: number; y: number }) {
+  if (type === "door") return <DoorSymbol x={x} y={y} />;
+  if (type === "window") return <WindowSymbol x={x} y={y} />;
+  if (type === "stair") return <StairSymbol x={x} y={y} />;
+  return <ElevatorSymbol x={x} y={y} />;
+}
+
+// ---- Empty canvas hint ----
+
+function EmptyHint({ width, height }: { width: number; height: number }) {
+  return (
+    <Group listening={false}>
+      <Text
+        x={0}
+        y={height / 2 - 30}
+        width={width}
+        text="'방' 도구를 선택하고 캔버스를 클릭해 방을 그려보세요"
+        fontSize={14}
+        fill="#aaa"
+        align="center"
+      />
+      <Text
+        x={0}
+        y={height / 2 - 10}
+        width={width}
+        text="3개 이상 점을 찍은 후 Enter 또는 더블클릭으로 완성"
+        fontSize={12}
+        fill="#ccc"
+        align="center"
+      />
+    </Group>
+  );
+}
+
+// ---- Main Component ----
+
+interface Props {
+  width: number;
+  height: number;
+  stageRef?: React.RefObject<unknown>;
+}
+
+export default function Canvas2D({ width, height, stageRef }: Props) {
+  const activeTool = useEditorStore(s => s.activeTool);
+  const isDrawing = useEditorStore(s => s.isDrawing);
+  const draftPoints = useEditorStore(s => s.draftPoints);
+  const selectedRoomId = useEditorStore(s => s.project.viewState.selectedRoomId);
+  const activeFloorId = useEditorStore(s => s.project.viewState.activeFloorId);
+  const addDraftPoint = useEditorStore(s => s.addDraftPoint);
+  const cancelDraft = useEditorStore(s => s.cancelDraft);
+  const commitDraft = useEditorStore(s => s.commitDraft);
+  const selectRoom = useEditorStore(s => s.selectRoom);
+  const updateRoom = useEditorStore(s => s.updateRoom);
+  const addOpening = useEditorStore(s => s.addOpening);
+
+  const floor = useActiveFloor();
+  const refImage = useRefImage(floor?.referenceImage ?? null);
+
+  const isOpeningTool = (t: typeof activeTool): t is RoomOpeningType =>
+    t === "door" || t === "window" || t === "stair" || t === "elevator";
+
+  const handleStageClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    if (activeTool === "room") {
+      if (e.evt.detail === 2 && draftPoints.length >= 3) { commitDraft(); return; }
+      addDraftPoint({ x: pos.x, y: pos.y });
+      return;
+    }
+
+    if (activeTool === "select") {
+      // clicked empty area — deselect
+      selectRoom(null);
+      return;
+    }
+
+    if (isOpeningTool(activeTool) && activeFloorId && floor) {
+      const pt = { x: pos.x, y: pos.y };
+      const target = floor.rooms.find(r => pointInPolygon(pt, r.roomPolygon));
+      if (target) {
+        addOpening(activeFloorId, target.roomId, activeTool, pos.x, pos.y);
+      }
+    }
+  }, [activeTool, draftPoints.length, addDraftPoint, commitDraft, activeFloorId, floor, addOpening, selectRoom]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") cancelDraft();
+    if (e.key === "Enter" && draftPoints.length >= 3) commitDraft();
+  }, [cancelDraft, commitDraft, draftPoints.length]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
+  if (!floor) return null;
+
+  const hasRooms = floor.rooms.length > 0;
+  const draftFlat = draftPoints.flatMap(p => [p.x, p.y]);
+  const selectedRoom = floor.rooms.find(r => r.roomId === selectedRoomId);
+
+  const cursor =
+    activeTool === "room" ? "crosshair" :
+    isOpeningTool(activeTool) ? "cell" : "default";
+
+  return (
+    <Stage
+      ref={stageRef as React.RefObject<never>}
+      width={width}
+      height={height}
+      onClick={handleStageClick}
+      style={{ cursor }}
+    >
+      <Layer>
+        {/* Background */}
+        <Rect x={0} y={0} width={width} height={height} fill="#fafaf8" />
+
+        {/* Empty state hint */}
+        {!hasRooms && !isDrawing && (
+          <EmptyHint width={width} height={height} />
+        )}
+
+        {/* Reference image */}
+        {refImage && (
+          <Image image={refImage} x={0} y={0} width={width} height={height} opacity={0.3} />
+        )}
+
+        {/* Rooms */}
+        {floor.rooms.map(room => {
+          const isSelected = room.roomId === selectedRoomId;
+          const flat = room.roomPolygon.flatMap(p => [p.x, p.y]);
+          const lp = room.labelPosition;
+          return (
+            <Group
+              key={room.roomId}
+              onClick={(e) => {
+                if (activeTool === "select") {
+                  selectRoom(room.roomId);
+                  e.cancelBubble = true;
+                }
+              }}
+            >
+              <Line
+                points={flat}
+                closed
+                fill={isSelected ? ROOM_FILL_SELECTED : ROOM_FILL}
+                stroke={isSelected ? ROOM_STROKE_SELECTED : ROOM_STROKE}
+                strokeWidth={isSelected ? 2 : 1.5}
+                shadowEnabled={isSelected}
+                shadowColor={ROOM_STROKE_SELECTED}
+                shadowBlur={6}
+                shadowOpacity={0.3}
+              />
+              {lp && (
+                <Text
+                  x={lp.x - 50}
+                  y={lp.y - 8}
+                  width={100}
+                  text={room.roomName}
+                  fontSize={12}
+                  fill={isSelected ? "#3a6c5f" : "#555548"}
+                  align="center"
+                  listening={false}
+                />
+              )}
+
+              {/* Openings */}
+              {(room.openings ?? []).map(op => (
+                <OpeningSymbol key={op.id} type={op.type} x={op.x} y={op.y} />
+              ))}
+            </Group>
+          );
+        })}
+
+        {/* Vertex drag handles for selected room */}
+        {activeTool === "select" && selectedRoom && activeFloorId &&
+          selectedRoom.roomPolygon.map((pt, idx) => (
+            <Circle
+              key={`v-${selectedRoom.roomId}-${idx}`}
+              x={pt.x}
+              y={pt.y}
+              radius={5}
+              fill={VERTEX_FILL}
+              stroke={VERTEX_STROKE}
+              strokeWidth={2}
+              draggable
+              onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "move"; }}
+              onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
+              onDragEnd={e => {
+                const newPoly = selectedRoom.roomPolygon.map((p, i) =>
+                  i === idx ? { x: e.target.x(), y: e.target.y() } : p
+                );
+                updateRoom(activeFloorId, selectedRoom.roomId, { roomPolygon: newPoly });
+              }}
+            />
+          ))
+        }
+
+        {/* Draft polygon */}
+        {isDrawing && draftPoints.length > 0 && (
+          <>
+            {draftPoints.length >= 2 && (
+              <Line
+                points={draftFlat}
+                stroke={DRAFT_COLOR}
+                strokeWidth={2}
+                dash={[6, 3]}
+                listening={false}
+              />
+            )}
+            {draftPoints.map((p, i) => (
+              <Circle
+                key={i}
+                x={p.x}
+                y={p.y}
+                radius={4}
+                fill={DRAFT_COLOR}
+                listening={false}
+              />
+            ))}
+          </>
+        )}
+      </Layer>
+    </Stage>
+  );
+}
