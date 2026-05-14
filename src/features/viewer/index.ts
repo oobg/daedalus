@@ -41,8 +41,10 @@ export {
   type WoodAccentShadingVariant,
 } from "./wood-accent-shading.ts";
 export {
+  evaluateGlassMaterialRead,
   getGlassMaterialConfig,
   type GlassMaterialConfig,
+  type GlassMaterialReadProfile,
   type GlassMaterialVariant,
 } from "./glass-material.ts";
 export {

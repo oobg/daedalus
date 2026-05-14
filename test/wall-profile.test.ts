@@ -11,6 +11,12 @@ test("createWallProfileOutline softens the top silhouette when a radius is provi
   const height = 0.9;
   const topEdgeRadius = 0.011;
   const halfThickness = thickness / 2;
+  const rectangularOutline = createWallProfileOutline({
+    thickness,
+    height,
+    topEdgeRadius: 0,
+    curveSegments: 6,
+  });
 
   const outline = createWallProfileOutline({
     thickness,
@@ -19,7 +25,17 @@ test("createWallProfileOutline softens the top silhouette when a radius is provi
     curveSegments: 6,
   });
 
+  assert.equal(
+    rectangularOutline.length,
+    4,
+    "Expected the hard extrusion profile to stay rectangular.",
+  );
   assert.ok(outline.length > 4, "Expected a softened wall profile to add silhouette points.");
+  assert.notDeepEqual(
+    outline,
+    rectangularOutline,
+    "Softened profile should differ from the hard 90-degree box outline.",
+  );
   assert.ok(
     !outline.some(
       (point) =>

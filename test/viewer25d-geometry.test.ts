@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createRoomSurfaceLayout,
   createWallContourOffsets,
   createSoftenedWallCornerPolygon,
   createInsetPolygon,
@@ -14,6 +15,7 @@ import {
   resolveFurnitureFootprintClearance,
   resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
+  resolveRoomLayerElevations,
   validateWallTopology,
   resolveWallBaseElevationOffset,
   resolveWallCornerRadius,
@@ -57,6 +59,20 @@ test("resolveFloorBaseElevationOffset supports configurable wall-driven floor se
   });
 
   assert.equal(offset, -(DEFAULT_WALL_THICKNESS * 2 * 0.5));
+});
+
+test("resolveRoomLayerElevations keeps wall and floor layer heights distinct for spatial separation", () => {
+  const elevations = resolveRoomLayerElevations({
+    wallThickness: DEFAULT_WALL_THICKNESS,
+  });
+
+  assert.equal(elevations.wallBaseOffset, DEFAULT_WALL_BASE_OFFSET);
+  assert.equal(elevations.floorBaseOffset < elevations.wallBaseOffset, true);
+  assert.equal(elevations.wallLayerHeightDelta > 0, true);
+  assert.equal(
+    elevations.wallLayerHeightDelta,
+    elevations.wallBaseOffset - elevations.floorBaseOffset,
+  );
 });
 
 test("resolveFloorPerimeterInset computes a measurable floor setback from wall boundaries", () => {
@@ -212,6 +228,45 @@ test("createWallContourOffsets rejects floor-gap clearances that consume the ful
       ),
     /Wall thickness must be greater than the floor-gap clearance/,
   );
+});
+
+test("createRoomSurfaceLayout applies a consistent horizontal gap between the floor surface and adjacent wall footprint", () => {
+  const layout = createRoomSurfaceLayout(
+    [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 3 },
+      { x: 0, y: 3 },
+    ],
+    {
+      wallThickness: 0.5,
+      floorPerimeterInsetRatio: 0.2,
+      minimumFloorPerimeterInset: 0.1,
+    },
+  );
+
+  assert.equal(layout.wallInnerFootprintInset, 0.25);
+  assert.equal(layout.floorGapClearance, 0.1);
+  assert.equal(
+    Math.abs(
+      layout.floorSurfaceInset -
+        layout.wallInnerFootprintInset -
+        layout.floorGapClearance,
+    ) < 1e-6,
+    true,
+  );
+  assert.deepEqual(layout.wallInnerFootprint, [
+    { x: 0.25, y: 0.25 },
+    { x: 3.75, y: 0.25 },
+    { x: 3.75, y: 2.75 },
+    { x: 0.25, y: 2.75 },
+  ]);
+  assert.deepEqual(layout.floorSurfaceFootprint, [
+    { x: 0.35, y: 0.35 },
+    { x: 3.65, y: 0.35 },
+    { x: 3.65, y: 2.65 },
+    { x: 0.35, y: 2.65 },
+  ]);
 });
 
 test("resolveFurnitureFootprintClearance preserves a centered footprint while exposing wall-safe placement bounds", () => {

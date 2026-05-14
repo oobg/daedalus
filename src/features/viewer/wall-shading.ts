@@ -16,18 +16,18 @@ export interface WallShadingConfig {
 
 const INTERIOR_WALL_SHADING = Object.freeze<WallShadingConfig>({
   ...getWallColorPalette("interior"),
-  roughness: 0.94,
-  metalness: 0.04,
-  envMapIntensity: 0.18,
-  emissiveIntensity: 0.025,
+  roughness: 0.97,
+  metalness: 0.02,
+  envMapIntensity: 0.1,
+  emissiveIntensity: 0.022,
 });
 
 const EXTERIOR_WALL_SHADING = Object.freeze<WallShadingConfig>({
   ...getWallColorPalette("exterior"),
-  roughness: 0.96,
-  metalness: 0.03,
-  envMapIntensity: 0.14,
-  emissiveIntensity: 0.02,
+  roughness: 0.98,
+  metalness: 0.015,
+  envMapIntensity: 0.08,
+  emissiveIntensity: 0.018,
 });
 
 export function getWallShadingConfig(

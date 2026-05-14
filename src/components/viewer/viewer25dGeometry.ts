@@ -1,3 +1,5 @@
+import { createOuterWallCornerProfile } from "../../features/viewer/wall-corner-profile.ts";
+
 export const DEFAULT_WALL_HEIGHT_SCALE = 0.3;
 export const DEFAULT_WALL_THICKNESS = 0.045;
 export const DEFAULT_WALL_BASE_OFFSET = 0.014;
@@ -11,7 +13,6 @@ export const DEFAULT_WALL_CORNER_SEGMENTS = 4;
 
 const PARALLEL_LINE_EPSILON = 1e-6;
 const COORDINATE_PRECISION = 1e6;
-const MIN_WALL_CORNER_SEGMENTS = 1;
 
 export interface Viewer25DPoint2D {
   x: number;
@@ -47,6 +48,22 @@ export interface Viewer25DWallContourOffsets {
   floorGapClearance: number;
   wallThickness: number;
   segments: Viewer25DWallContourSegment[];
+}
+
+export interface Viewer25DRoomSurfaceLayout {
+  floorGapClearance: number;
+  floorSurfaceFootprint: Viewer25DPoint2D[];
+  floorSurfaceInset: number;
+  wallInnerFootprint: Viewer25DPoint2D[];
+  wallOuterFootprint: Viewer25DPoint2D[];
+  wallThickness: number;
+  wallInnerFootprintInset: number;
+}
+
+export interface Viewer25DRoomLayerElevations {
+  floorBaseOffset: number;
+  wallBaseOffset: number;
+  wallLayerHeightDelta: number;
 }
 
 export interface Viewer25DWallTopologyValidationResult {
@@ -112,6 +129,19 @@ export function resolveFloorPerimeterInset(
   );
 }
 
+export function resolveRoomLayerElevations(
+  config: Viewer25DGeometryConfig = {},
+): Viewer25DRoomLayerElevations {
+  const floorBaseOffset = resolveFloorBaseElevationOffset(config);
+  const wallBaseOffset = resolveWallBaseElevationOffset(config);
+
+  return {
+    floorBaseOffset,
+    wallBaseOffset,
+    wallLayerHeightDelta: roundCoordinate(wallBaseOffset - floorBaseOffset),
+  };
+}
+
 export function resolveWallCornerRadius(
   config: Viewer25DGeometryConfig = {},
 ): number {
@@ -174,9 +204,7 @@ export function createSoftenedWallCornerPaths(
   }
 
   const resolvedRadius = resolveWallCornerRadius(config);
-  const wallCornerSegments = normalizeWallCornerSegments(
-    config.wallCornerSegments ?? DEFAULT_WALL_CORNER_SEGMENTS,
-  );
+  const wallCornerSegments = config.wallCornerSegments ?? DEFAULT_WALL_CORNER_SEGMENTS;
   const wallCornerStyle = config.wallCornerStyle ?? "rounded";
   const winding = signedArea > 0 ? 1 : -1;
   const cornerPaths: Viewer25DSoftenedCornerPath[] = [];
@@ -185,17 +213,19 @@ export function createSoftenedWallCornerPaths(
     const previous = points[(index - 1 + points.length) % points.length];
     const current = points[index];
     const next = points[(index + 1) % points.length];
-    const softenedCorner = createSoftenedCornerJoin(
+    const softenedCorner = createOuterWallCornerProfile(
       previous,
       current,
       next,
-      resolvedRadius,
-      wallCornerStyle,
-      wallCornerSegments,
-      winding,
+      {
+        radius: resolvedRadius,
+        style: wallCornerStyle,
+        segments: wallCornerSegments,
+        winding,
+      },
     );
 
-    if (!softenedCorner) {
+    if (!softenedCorner.isSoftened) {
       cornerPaths.push({
         index,
         originalCorner: current,
@@ -210,7 +240,7 @@ export function createSoftenedWallCornerPaths(
     cornerPaths.push({
       index,
       originalCorner: current,
-      path: dedupeSequentialPathPoints(softenedCorner),
+      path: softenedCorner.path,
       style: wallCornerStyle,
       radius: resolvedRadius,
       isSoftened: true,
@@ -256,107 +286,6 @@ function intersectOffsetLines(
     x: pointA.x + directionA.x * t,
     y: pointA.y + directionA.y * t,
   };
-}
-
-function createSoftenedCornerJoin(
-  previous: Viewer25DPoint2D,
-  current: Viewer25DPoint2D,
-  next: Viewer25DPoint2D,
-  radius: number,
-  style: Viewer25DWallCornerStyle,
-  segments: number,
-  winding: number,
-): Viewer25DPoint2D[] | null {
-  if (radius <= PARALLEL_LINE_EPSILON) {
-    return null;
-  }
-
-  const incoming = {
-    x: current.x - previous.x,
-    y: current.y - previous.y,
-  };
-  const outgoing = {
-    x: next.x - current.x,
-    y: next.y - current.y,
-  };
-  const incomingLength = Math.hypot(incoming.x, incoming.y);
-  const outgoingLength = Math.hypot(outgoing.x, outgoing.y);
-
-  if (
-    incomingLength <= PARALLEL_LINE_EPSILON ||
-    outgoingLength <= PARALLEL_LINE_EPSILON
-  ) {
-    return null;
-  }
-
-  const normalizedIncoming = {
-    x: incoming.x / incomingLength,
-    y: incoming.y / incomingLength,
-  };
-  const normalizedOutgoing = {
-    x: outgoing.x / outgoingLength,
-    y: outgoing.y / outgoingLength,
-  };
-  const turn =
-    normalizedIncoming.x * normalizedOutgoing.y -
-    normalizedIncoming.y * normalizedOutgoing.x;
-
-  if (turn * winding <= PARALLEL_LINE_EPSILON) {
-    return null;
-  }
-
-  const offsetDistance = Math.min(
-    radius,
-    incomingLength / 2 - PARALLEL_LINE_EPSILON,
-    outgoingLength / 2 - PARALLEL_LINE_EPSILON,
-  );
-
-  if (offsetDistance <= PARALLEL_LINE_EPSILON) {
-    return null;
-  }
-
-  const start = {
-    x: current.x - normalizedIncoming.x * offsetDistance,
-    y: current.y - normalizedIncoming.y * offsetDistance,
-  };
-  const end = {
-    x: current.x + normalizedOutgoing.x * offsetDistance,
-    y: current.y + normalizedOutgoing.y * offsetDistance,
-  };
-
-  if (style === "chamfer") {
-    return [roundPoint(start), roundPoint(end)];
-  }
-
-  return createRoundedCornerJoin(start, current, end, segments);
-}
-
-function createRoundedCornerJoin(
-  start: Viewer25DPoint2D,
-  control: Viewer25DPoint2D,
-  end: Viewer25DPoint2D,
-  segments: number,
-): Viewer25DPoint2D[] {
-  const points: Viewer25DPoint2D[] = [];
-
-  for (let step = 0; step <= segments; step += 1) {
-    const t = step / segments;
-    const inverseT = 1 - t;
-    points.push(
-      roundPoint({
-        x:
-          inverseT * inverseT * start.x +
-          2 * inverseT * t * control.x +
-          t * t * end.x,
-        y:
-          inverseT * inverseT * start.y +
-          2 * inverseT * t * control.y +
-          t * t * end.y,
-      }),
-    );
-  }
-
-  return points;
 }
 
 export function createInsetPolygon(
@@ -426,6 +355,28 @@ export function createWallContourOffsets(
     floorGapClearance,
     wallThickness,
     segments,
+  };
+}
+
+export function createRoomSurfaceLayout(
+  points: readonly Viewer25DPoint2D[],
+  config: Viewer25DGeometryConfig = {},
+): Viewer25DRoomSurfaceLayout {
+  const wallThickness = config.wallThickness ?? DEFAULT_WALL_THICKNESS;
+  const wallInnerFootprintInset = roundCoordinate(wallThickness / 2);
+  const floorGapClearance = resolveFloorPerimeterInset(config);
+  const floorSurfaceInset = roundCoordinate(
+    wallInnerFootprintInset + floorGapClearance,
+  );
+
+  return {
+    floorGapClearance,
+    floorSurfaceFootprint: createParallelPolygon(points, floorSurfaceInset),
+    floorSurfaceInset,
+    wallInnerFootprint: createParallelPolygon(points, wallInnerFootprintInset),
+    wallOuterFootprint: createParallelPolygon(points, -wallInnerFootprintInset),
+    wallThickness,
+    wallInnerFootprintInset,
   };
 }
 
@@ -676,26 +627,6 @@ function arePointsEquivalent(
     Math.abs(left.x - right.x) <= PARALLEL_LINE_EPSILON &&
     Math.abs(left.y - right.y) <= PARALLEL_LINE_EPSILON
   );
-}
-
-function dedupeSequentialPathPoints(
-  points: readonly Viewer25DPoint2D[],
-): Viewer25DPoint2D[] {
-  return points.reduce<Viewer25DPoint2D[]>((result, point) => {
-    if (!arePointsEquivalent(result.at(-1), point)) {
-      result.push(point);
-    }
-
-    return result;
-  }, []);
-}
-
-function normalizeWallCornerSegments(value: number): number {
-  if (!Number.isFinite(value) || value < MIN_WALL_CORNER_SEGMENTS) {
-    throw new Error("Wall corner segments must be a finite integer greater than or equal to 1.");
-  }
-
-  return Math.floor(value);
 }
 
 function calculateBounds(

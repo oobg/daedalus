@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getGlassMaterialConfig,
   getWallShadingConfig,
   getWoodAccentShadingConfig,
 } from "../src/features/viewer/index.ts";
 
-test("flooring wood accent shading stays warm, tactile, and distinct from wall material", () => {
+test("flooring wood accent shading stays warm, tactile, and distinct from wall and glass materials", () => {
   const flooring = getWoodAccentShadingConfig("flooring");
   const wall = getWallShadingConfig("interior");
+  const glass = getGlassMaterialConfig("windowPane");
 
   assert.deepEqual(flooring, {
     color: "#B6936E",
@@ -20,9 +22,13 @@ test("flooring wood accent shading stays warm, tactile, and distinct from wall m
   });
   assert.notEqual(flooring.color, wall.color);
   assert.notEqual(flooring.emissive, wall.emissive);
+  assert.notEqual(flooring.color, glass.color);
+  assert.notEqual(flooring.emissive, glass.emissive);
   assert.ok(flooring.roughness < wall.roughness);
+  assert.ok(flooring.roughness > glass.roughness);
   assert.ok(flooring.roughness >= 0.75);
   assert.ok(flooring.metalness <= 0.04);
+  assert.ok(flooring.envMapIntensity > glass.envMapIntensity);
   assert.ok(Object.isFrozen(flooring));
 });
 

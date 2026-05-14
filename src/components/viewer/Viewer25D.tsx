@@ -19,12 +19,11 @@ import {
 import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
 import { resolveAmbientOcclusionSettings } from "@/features/viewer/ambient-occlusion";
 import {
-  createInsetPolygon,
+  createRoomSurfaceLayout,
   DEFAULT_WALL_HEIGHT_SCALE,
   DEFAULT_WALL_THICKNESS,
-  resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
-  resolveWallBaseElevationOffset,
+  resolveRoomLayerElevations,
 } from "./viewer25dGeometry";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
@@ -37,6 +36,9 @@ const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
 const AMBIENT_LIGHTING = getAmbientLightingPreset();
 const VIEWER_PRESENTATION = getViewerPresentationPreset();
+const DEFAULT_ROOM_LAYER_ELEVATIONS = resolveRoomLayerElevations({
+  wallThickness: WALL_THICKNESS,
+});
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
@@ -290,6 +292,7 @@ interface RoomMeshProps {
   floorY:   number;
   height:   number;
   floorBaseOffset: number;
+  wallBaseOffset: number;
   floorPerimeterInset: number;
   color:    string;
   label:    string;
@@ -301,15 +304,24 @@ function RoomMesh({
   floorY,
   height,
   floorBaseOffset,
+  wallBaseOffset,
   floorPerimeterInset,
   color,
   label,
 }: RoomMeshProps) {
-  const floorPoints = useMemo(
-    () => createInsetPolygon(points, floorPerimeterInset),
+  const surfaceLayout = useMemo(
+    () =>
+      createRoomSurfaceLayout(points, {
+        wallThickness: WALL_THICKNESS,
+        minimumFloorPerimeterInset: floorPerimeterInset,
+        floorPerimeterInsetRatio: 0,
+      }),
     [points, floorPerimeterInset],
   );
-  const shape = useMemo(() => polygonToShape(floorPoints), [floorPoints]);
+  const shape = useMemo(
+    () => polygonToShape(surfaceLayout.floorSurfaceFootprint),
+    [surfaceLayout],
+  );
   const wallH = height * WALL_HEIGHT_SCALE;
 
   const wallMeshAssembly = useMemo(
@@ -320,14 +332,14 @@ function RoomMesh({
           y: point.y / 100,
         })),
         {
-          baseOffset: resolveWallBaseElevationOffset(),
+          baseOffset: wallBaseOffset,
           curveSegments: 6,
           height: wallH,
           thickness: WALL_THICKNESS,
           topEdgeRadius: WALL_TOP_EDGE_RADIUS,
         },
       ),
-    [points, wallH],
+    [points, wallBaseOffset, wallH],
   );
 
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
@@ -538,6 +550,7 @@ interface Props {
   activeFloorId: string | null;
   exteriorPolygon?: EditorPoint[] | null;
   floorBaseOffset?: number;
+  wallBaseOffset?: number;
   floorPerimeterInset?: number;
 }
 
@@ -545,9 +558,8 @@ export default function Viewer25D({
   floors,
   activeFloorId,
   exteriorPolygon,
-  floorBaseOffset = resolveFloorBaseElevationOffset({
-    wallThickness: WALL_THICKNESS,
-  }),
+  floorBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.floorBaseOffset,
+  wallBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.wallBaseOffset,
   floorPerimeterInset = resolveFloorPerimeterInset({
     wallThickness: WALL_THICKNESS,
   }),
@@ -633,6 +645,7 @@ export default function Viewer25D({
                   floorY={y}
                   height={floor.floorHeight}
                   floorBaseOffset={floorBaseOffset}
+                  wallBaseOffset={wallBaseOffset}
                   floorPerimeterInset={floorPerimeterInset}
                   color={FLOOR_COLORS[colorIndex % FLOOR_COLORS.length]}
                   label={room.roomName}
