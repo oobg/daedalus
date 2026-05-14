@@ -19,6 +19,17 @@ export {
   type WoodAccentShadingVariant,
 } from "./wood-accent-shading.ts";
 export {
+  getGlassMaterialConfig,
+  type GlassMaterialConfig,
+  type GlassMaterialVariant,
+} from "./glass-material.ts";
+export {
+  classifySceneElementMaterialTags,
+  type SceneElementKind,
+  type SceneElementMaterialAssignment,
+  type SceneElementMaterialTag,
+} from "./scene-element-material-tags.ts";
+export {
   assertViewerExportCompositionInput,
   validateViewerExportCompositionInput,
   type ValidateViewerExportCompositionInputResult,

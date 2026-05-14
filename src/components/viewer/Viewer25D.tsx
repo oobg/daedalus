@@ -5,7 +5,10 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
-import { getWallShadingConfig } from "@/features/viewer";
+import {
+  getGlassMaterialConfig,
+  getWallShadingConfig,
+} from "@/features/viewer";
 import {
   createInsetPolygon,
   DEFAULT_WALL_HEIGHT_SCALE,
@@ -20,6 +23,7 @@ const WALL_HEIGHT_SCALE = DEFAULT_WALL_HEIGHT_SCALE;
 const WALL_THICKNESS    = DEFAULT_WALL_THICKNESS;  // world units (~4.5cm at 1:100)
 const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
+const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
@@ -60,6 +64,7 @@ function computeSceneCenter(floors: EditorFloor[]): { x: number; z: number } {
 const EX_DOOR_PANEL  = { depth: 0.065, bevelEnabled: false } as const;
 const EX_DOOR_ARC    = { depth: 0.022, bevelEnabled: false } as const;
 const EX_WINDOW      = { depth: 0.050, bevelEnabled: false } as const;
+const EX_WINDOW_PANE = { depth: 0.012, bevelEnabled: false } as const;
 const EX_ELEV        = { depth: 0.070, bevelEnabled: false } as const;
 
 // Door — solid extruded panel + shallow translucent arc sweep
@@ -101,7 +106,7 @@ function DoorSymbol3D({ x, z }: { x: number; z: number }) {
 function WindowSymbol3D({ x, z }: { x: number; z: number }) {
   const w = 0.24, h = 0.07, ft = 0.013, lt = 0.010;
 
-  const { frameGeo, divGeo } = useMemo(() => {
+  const { frameGeo, divGeo, paneGeo } = useMemo(() => {
     const frame = new THREE.Shape();
     frame.moveTo(-w / 2, -h / 2); frame.lineTo(w / 2, -h / 2);
     frame.lineTo( w / 2,  h / 2); frame.lineTo(-w / 2, h / 2);
@@ -117,9 +122,17 @@ function WindowSymbol3D({ x, z }: { x: number; z: number }) {
     div.lineTo( w / 2 - ft,  lt / 2); div.lineTo(-w / 2 + ft, lt / 2);
     div.closePath();
 
+    const pane = new THREE.Shape();
+    pane.moveTo(-w / 2 + ft, -h / 2 + ft);
+    pane.lineTo(w / 2 - ft, -h / 2 + ft);
+    pane.lineTo( w / 2 - ft,  h / 2 - ft);
+    pane.lineTo(-w / 2 + ft,  h / 2 - ft);
+    pane.closePath();
+
     return {
       frameGeo: new THREE.ExtrudeGeometry(frame, EX_WINDOW),
       divGeo:   new THREE.ExtrudeGeometry(div,   EX_WINDOW),
+      paneGeo:  new THREE.ExtrudeGeometry(pane,  EX_WINDOW_PANE),
     };
   }, []);
 
@@ -128,8 +141,11 @@ function WindowSymbol3D({ x, z }: { x: number; z: number }) {
       <mesh geometry={frameGeo}>
         <meshLambertMaterial color="#7A9EB5" />
       </mesh>
+      <mesh geometry={paneGeo}>
+        <meshPhysicalMaterial {...WINDOW_GLASS_MATERIAL} />
+      </mesh>
       <mesh geometry={divGeo}>
-        <meshLambertMaterial color="#7A9EB5" transparent opacity={0.55} />
+        <meshLambertMaterial color="#90A8B1" transparent opacity={0.72} />
       </mesh>
     </group>
   );
