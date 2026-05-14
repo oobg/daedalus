@@ -44,3 +44,8 @@ Loaded on-demand — not preloaded.
 wonder, reflect, advocate, contrarian, judge
 **Support**: hacker, simplifier, researcher, architect
 <!-- ooo:END -->
+
+## 프로젝트 규칙
+
+1. **서브 태스크 완료 시 커밋** — 각 서브 태스크가 끝나면 즉시 해당 변경사항을 커밋한다.
+2. **커밋 메시지는 한글로 작성** — 모든 커밋 메시지는 한글로 작성한다.
