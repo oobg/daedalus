@@ -1,23 +1,14 @@
+import type { Viewer25DPoint2D } from "../../components/viewer/viewer25dGeometry.ts";
+import { createWallSegmentGeometry } from "./wall-profile.ts";
 import {
-  createSoftenedWallCornerPaths,
-  type Viewer25DGeometryConfig,
-  type Viewer25DPoint2D,
-} from "../../components/viewer/viewer25dGeometry.ts";
-import {
-  createWallCornerMeshes,
-  type WallCornerSegmentMesh,
-} from "./wall-corner-mesh.ts";
-import {
-  createStraightWallSegmentMeshes,
-  type StraightWallSegmentMesh,
-} from "./wall-segment-mesh.ts";
-import type { WallProfileOptions } from "./wall-profile.ts";
+  createWallJunctionAssembly,
+  type WallJunctionAssemblyOptions,
+} from "./wall-junction-assembly.ts";
+import type { WallCornerSegmentMesh } from "./wall-corner-mesh.ts";
+import type { StraightWallSegmentMesh } from "./wall-segment-mesh.ts";
 
 export interface WallMeshAssemblyOptions
-  extends WallProfileOptions,
-    Viewer25DGeometryConfig {
-  baseOffset?: number;
-}
+  extends WallJunctionAssemblyOptions {}
 
 export type AssembledWallMesh =
   | StraightWallSegmentMesh
@@ -34,62 +25,55 @@ export function createWallMeshAssembly(
   points: readonly Viewer25DPoint2D[],
   options: WallMeshAssemblyOptions,
 ): WallMeshAssembly {
-  if (points.length < 2) {
-    return {
-      meshes: [],
-      cornerMeshCount: 0,
-      straightMeshCount: 0,
-      usesOnlySoftenedGeometryPipeline: true,
-    };
-  }
-
-  if (points.length === 2) {
-    const meshes = createStraightWallSegmentMeshes(points, {
-      ...options,
-      closeLoop: false,
-    });
-
-    return {
-      meshes,
-      cornerMeshCount: 0,
-      straightMeshCount: meshes.length,
-      usesOnlySoftenedGeometryPipeline: meshes.every(
-        (mesh) => mesh.source === "softened-straight-segment",
-      ),
-    };
-  }
-
-  const cornerPaths = createSoftenedWallCornerPaths(points, options);
-  const cornerMeshesByIndex = groupCornerMeshesByIndex(
-    createWallCornerMeshes(points, options),
-  );
+  const junctionAssembly = createWallJunctionAssembly(points, options);
   const meshes: AssembledWallMesh[] = [];
-  let straightMeshCount = 0;
-  let cornerMeshCount = 0;
 
-  for (let index = 0; index < cornerPaths.length; index += 1) {
-    const currentCornerMeshes = cornerMeshesByIndex.get(index) ?? [];
-    meshes.push(...currentCornerMeshes);
-    cornerMeshCount += currentCornerMeshes.length;
+  for (const section of junctionAssembly.sections) {
+    const geometry = createWallSegmentGeometry(section.length, options);
 
-    const currentPath = cornerPaths[index];
-    const nextPath = cornerPaths[(index + 1) % cornerPaths.length];
-    const straightMeshes = createStraightWallSegmentMeshes(
-      [readTerminalPoint(currentPath.path), nextPath.path[0] ?? nextPath.originalCorner],
-      {
-        ...options,
-        closeLoop: false,
+    if (section.kind === "corner") {
+      meshes.push({
+        angle: section.angle,
+        cornerIndex: section.cornerIndex,
+        cornerPathPointCount: section.cornerPathPointCount,
+        geometry,
+        length: section.length,
+        originalCorner: section.originalCorner,
+        path: [...section.path],
+        position: [
+          (section.start.x + section.end.x) / 2,
+          options.baseOffset ?? 0,
+          (section.start.y + section.end.y) / 2,
+        ],
+        rotation: [0, section.angle, 0],
+        source: "softened-corner-path",
+      });
+      continue;
+    }
+
+    meshes.push({
+      angle: section.angle,
+      center: {
+        x: (section.start.x + section.end.x) / 2,
+        z: (section.start.y + section.end.y) / 2,
       },
-    );
-
-    meshes.push(...straightMeshes);
-    straightMeshCount += straightMeshes.length;
+      geometry,
+      length: section.length,
+      position: [
+        (section.start.x + section.end.x) / 2,
+        options.baseOffset ?? 0,
+        (section.start.y + section.end.y) / 2,
+      ],
+      profilePointCount: readProfilePointCount(geometry),
+      rotation: [0, section.angle, 0],
+      source: "softened-straight-segment",
+    });
   }
 
   return {
     meshes,
-    cornerMeshCount,
-    straightMeshCount,
+    cornerMeshCount: junctionAssembly.cornerSectionCount,
+    straightMeshCount: junctionAssembly.straightSectionCount,
     usesOnlySoftenedGeometryPipeline: meshes.every(
       (mesh) =>
         mesh.source === "softened-straight-segment" ||
@@ -98,27 +82,10 @@ export function createWallMeshAssembly(
   };
 }
 
-function groupCornerMeshesByIndex(
-  meshes: readonly WallCornerSegmentMesh[],
-): Map<number, WallCornerSegmentMesh[]> {
-  const grouped = new Map<number, WallCornerSegmentMesh[]>();
+function readProfilePointCount(geometry: WallCornerSegmentMesh["geometry"]): number {
+  const shape = Array.isArray(geometry.parameters.shapes)
+    ? geometry.parameters.shapes[0]
+    : geometry.parameters.shapes;
 
-  for (const mesh of meshes) {
-    const group = grouped.get(mesh.cornerIndex);
-
-    if (group == null) {
-      grouped.set(mesh.cornerIndex, [mesh]);
-      continue;
-    }
-
-    group.push(mesh);
-  }
-
-  return grouped;
-}
-
-function readTerminalPoint(
-  path: readonly Viewer25DPoint2D[],
-): Viewer25DPoint2D {
-  return path[path.length - 1] ?? path[0] ?? { x: 0, y: 0 };
+  return shape.extractPoints(12).shape.length;
 }

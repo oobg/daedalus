@@ -71,6 +71,12 @@ export {
 export { type RenderSceneData } from "../renderer/renderer-contract.ts";
 export { type RendererPort } from "../renderer/renderer-entrypoint.ts";
 export {
+  assertFurnitureAssetReference,
+  validateFurnitureAssetReference,
+  type FurnitureAssetReferenceValidationIssue,
+  type FurnitureAssetReferenceValidationResult,
+} from "./furniture-asset-reference-guard.ts";
+export {
   MAX_APPROVED_FURNITURE_TEXTURE_SET_COUNT,
   MAX_APPROVED_FURNITURE_TRIANGLE_COUNT,
   validateFurnitureAssetMetadata,
@@ -92,6 +98,27 @@ export {
   type FurnitureAssetGeometryMetrics,
   type FurnitureAssetGeometryMetricsOptions,
 } from "./furniture-geometry-metrics.ts";
+export {
+  DEFAULT_FURNITURE_LAYER_OFFSET,
+  resolveFurnitureBaseElevation,
+  resolveFurnitureVerticalPlacement,
+  type FurnitureBaseElevationOptions,
+  type FurnitureVerticalPlacement,
+  type FurnitureVerticalPlacementOptions,
+} from "./furniture-base-elevation.ts";
+export {
+  SUPPORTED_FURNITURE_TYPES,
+  isNormalizedFurnitureDescriptor,
+  resolveFurnitureDescriptor,
+  type FurnitureDescriptorDimensions,
+  type FurnitureDescriptorMaterialTag,
+  type FurnitureDescriptorPrimitiveKind,
+  type FurnitureDescriptorPrimitivePart,
+  type HandcraftedModelFurnitureDescriptor,
+  type NormalizedFurnitureDescriptor,
+  type PrimitiveFurnitureDescriptor,
+  type SupportedFurnitureType,
+} from "./furniture-descriptor-mapping.ts";
 export {
   getViewerPresentationPreset,
   type ViewerPresentationPreset,

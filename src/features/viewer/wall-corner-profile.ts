@@ -44,6 +44,47 @@ export function createOuterWallCornerProfile(
     style,
     segments,
     winding,
+    "outer",
+  );
+
+  if (path == null) {
+    return {
+      path: [roundPoint(current)],
+      radius,
+      style,
+      isSoftened: false,
+    };
+  }
+
+  return {
+    path: dedupeSequentialPathPoints(path),
+    radius,
+    style,
+    isSoftened: true,
+  };
+}
+
+export function createInnerWallCornerProfile(
+  previous: WallCornerProfilePoint,
+  current: WallCornerProfilePoint,
+  next: WallCornerProfilePoint,
+  options: WallCornerProfileOptions,
+): WallCornerProfileResult {
+  const radius = options.radius;
+  const style = options.style ?? "rounded";
+  const segments = normalizeWallCornerSegments(
+    options.segments ?? DEFAULT_WALL_CORNER_SEGMENTS,
+  );
+  const winding = options.winding ?? inferCornerWinding(previous, current, next);
+  const path = createSoftenedCornerJoin(
+    previous,
+    current,
+    next,
+    radius,
+    style,
+    segments,
+    winding,
+    "inner",
   );
 
   if (path == null) {
@@ -71,6 +112,7 @@ function createSoftenedCornerJoin(
   style: WallCornerProfileStyle,
   segments: number,
   winding: number,
+  cornerType: "outer" | "inner",
 ): WallCornerProfilePoint[] | null {
   if (radius <= PARALLEL_LINE_EPSILON) {
     return null;
@@ -106,7 +148,13 @@ function createSoftenedCornerJoin(
     normalizedIncoming.x * normalizedOutgoing.y -
     normalizedIncoming.y * normalizedOutgoing.x;
 
-  if (turn * winding <= PARALLEL_LINE_EPSILON) {
+  const signedTurn = turn * winding;
+
+  if (cornerType === "outer" && signedTurn <= PARALLEL_LINE_EPSILON) {
+    return null;
+  }
+
+  if (cornerType === "inner" && signedTurn >= -PARALLEL_LINE_EPSILON) {
     return null;
   }
 
@@ -134,6 +182,16 @@ function createSoftenedCornerJoin(
   }
 
   return createRoundedCornerJoin(start, current, end, segments);
+}
+
+function normalizeWallCornerSegments(value: number): number {
+  if (!Number.isFinite(value) || value < MIN_WALL_CORNER_SEGMENTS) {
+    throw new Error(
+      "Wall corner segments must be a finite integer greater than or equal to 1.",
+    );
+  }
+
+  return Math.floor(value);
 }
 
 function createRoundedCornerJoin(
@@ -217,14 +275,4 @@ function roundPoint(point: WallCornerProfilePoint): WallCornerProfilePoint {
 
 function roundCoordinate(value: number): number {
   return Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
-}
-
-function normalizeWallCornerSegments(value: number): number {
-  if (!Number.isFinite(value) || value < MIN_WALL_CORNER_SEGMENTS) {
-    throw new Error(
-      "Wall corner segments must be a finite integer greater than or equal to 1.",
-    );
-  }
-
-  return Math.floor(value);
 }
