@@ -5,13 +5,17 @@ export interface AmbientLightingPreset {
   intensity: number;
 }
 
-const MINIATURE_ARCHITECTURE_AMBIENT_LIGHTING = Object.freeze<AmbientLightingPreset>({
-  color: "#FFF8F0",
-  intensity: 0.85,
+const AMBIENT_LIGHTING_PRESETS = Object.freeze<
+  Record<AmbientLightingPresetVariant, Readonly<AmbientLightingPreset>>
+>({
+  miniatureArchitecture: Object.freeze<AmbientLightingPreset>({
+    color: "#FFF8F0",
+    intensity: 0.85,
+  }),
 });
 
 export function getAmbientLightingPreset(
   variant: AmbientLightingPresetVariant = "miniatureArchitecture",
 ): Readonly<AmbientLightingPreset> {
-  return MINIATURE_ARCHITECTURE_AMBIENT_LIGHTING;
+  return AMBIENT_LIGHTING_PRESETS[variant];
 }

@@ -1,4 +1,9 @@
 export {
+  getAmbientLightingPreset,
+  type AmbientLightingPreset,
+  type AmbientLightingPresetVariant,
+} from "./ambient-lighting.ts";
+export {
   createViewerComposition,
   type LoadedViewerScene,
   type ViewerComposition,
@@ -72,3 +77,9 @@ export {
   type FurnitureAssetLookupRequest,
   type FurnitureAssetSelectionResult,
 } from "./furniture-asset-selection.ts";
+export {
+  computeFurnitureAssetGeometryMetrics,
+  type FurnitureAssetGeometryMesh,
+  type FurnitureAssetGeometryMetrics,
+  type FurnitureAssetGeometryMetricsOptions,
+} from "./furniture-geometry-metrics.ts";

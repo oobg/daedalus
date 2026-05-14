@@ -1,16 +1,21 @@
 "use client";
 
-import { Suspense, useMemo, useCallback } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Suspense, useMemo, useCallback, useEffect, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
-import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
 import {
   createWallMeshAssembly,
   getGlassMaterialConfig,
   getWallShadingConfig,
 } from "@/features/viewer";
+import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
+import { resolveAmbientOcclusionSettings } from "@/features/viewer/ambient-occlusion";
 import {
   createInsetPolygon,
   DEFAULT_WALL_HEIGHT_SCALE,
@@ -357,6 +362,84 @@ function ScreenshotButton() {
   );
 }
 
+function AmbientOcclusionComposer() {
+  const { gl, scene, camera, size } = useThree();
+  const composerRef = useRef<EffectComposer | null>(null);
+
+  const ambientOcclusion = useMemo(
+    () =>
+      resolveAmbientOcclusionSettings({
+        viewportWidth: size.width,
+        devicePixelRatio: gl.getPixelRatio(),
+        hardwareConcurrency:
+          typeof navigator === "undefined"
+            ? undefined
+            : navigator.hardwareConcurrency,
+        maxTouchPoints:
+          typeof navigator === "undefined"
+            ? undefined
+            : navigator.maxTouchPoints,
+      }),
+    [gl, size.width],
+  );
+
+  useEffect(() => {
+    if (!ambientOcclusion.enabled) {
+      composerRef.current?.dispose();
+      composerRef.current = null;
+      return;
+    }
+
+    const composer = new EffectComposer(gl);
+    composer.setPixelRatio(gl.getPixelRatio());
+    composer.setSize(size.width, size.height);
+
+    const renderPass = new RenderPass(scene, camera);
+    const ambientOcclusionPass = new GTAOPass(
+      scene,
+      camera,
+      size.width,
+      size.height,
+    );
+    ambientOcclusionPass.blendIntensity = ambientOcclusion.strength;
+    ambientOcclusionPass.updateGtaoMaterial({
+      radius: ambientOcclusion.radius,
+      thickness: ambientOcclusion.thickness,
+      distanceFallOff: ambientOcclusion.falloff,
+      samples: ambientOcclusion.samples,
+      screenSpaceRadius: true,
+    });
+    ambientOcclusionPass.updatePdMaterial({
+      radius: ambientOcclusion.denoiseRadius,
+      rings: ambientOcclusion.denoiseRings,
+      samples: ambientOcclusion.denoiseSamples,
+    });
+
+    composer.addPass(renderPass);
+    composer.addPass(ambientOcclusionPass);
+    composer.addPass(new OutputPass());
+
+    composerRef.current = composer;
+
+    return () => {
+      ambientOcclusionPass.dispose();
+      composer.dispose();
+      composerRef.current = null;
+    };
+  }, [ambientOcclusion, camera, gl, scene, size.height, size.width]);
+
+  useFrame((_, delta) => {
+    if (composerRef.current != null) {
+      composerRef.current.render(delta);
+      return;
+    }
+
+    gl.render(scene, camera);
+  }, 1);
+
+  return null;
+}
+
 // ── Exterior wall — wraps all floors ─────────────────────────────────────────
 interface ExteriorWallProps {
   points: EditorPoint[];
@@ -429,6 +512,7 @@ export default function Viewer25D({
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
+        <AmbientOcclusionComposer />
         <ambientLight
           intensity={AMBIENT_LIGHTING.intensity}
           color={AMBIENT_LIGHTING.color}

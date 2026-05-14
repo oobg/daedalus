@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getAmbientLightingPreset } from "../src/features/viewer/ambient-lighting.ts";
+import { getAmbientLightingPreset } from "../src/features/viewer/index.ts";
 
 test("ambient lighting preset stays soft and warm-neutral for the miniature diorama base pass", () => {
   const ambientLighting = getAmbientLightingPreset("miniatureArchitecture");
