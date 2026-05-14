@@ -9,6 +9,18 @@ export {
   type WallShadingVariant,
 } from "./wall-shading.ts";
 export {
+  createStraightWallSegmentMeshes,
+  type StraightWallSegmentMesh,
+  type StraightWallSegmentMeshOptions,
+  type StraightWallSegmentPoint,
+} from "./wall-segment-mesh.ts";
+export {
+  createWallMeshAssembly,
+  type AssembledWallMesh,
+  type WallMeshAssembly,
+  type WallMeshAssemblyOptions,
+} from "./wall-mesh-assembly.ts";
+export {
   getWallColorPalette,
   type WallColorPalette,
   type WallColorPaletteVariant,
@@ -29,6 +41,15 @@ export {
   type SceneElementMaterialAssignment,
   type SceneElementMaterialTag,
 } from "./scene-element-material-tags.ts";
+export {
+  applySceneElementRenderMaterials,
+  validateSceneMaterialSeparation,
+  type AppliedSceneElementMaterialAssignment,
+  type AppliedSceneMaterialAssignments,
+  type SceneMaterialSeparationSummary,
+  type SceneMaterialSeparationValidationIssue,
+  type SceneMaterialSeparationValidationResult,
+} from "./scene-material-assignment.ts";
 export {
   assertViewerExportCompositionInput,
   validateViewerExportCompositionInput,

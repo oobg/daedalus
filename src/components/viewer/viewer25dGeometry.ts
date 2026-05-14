@@ -55,6 +55,15 @@ export interface Viewer25DWallTopologyValidationResult {
   points: Viewer25DPoint2D[];
 }
 
+export interface Viewer25DSoftenedCornerPath {
+  index: number;
+  originalCorner: Viewer25DPoint2D;
+  path: Viewer25DPoint2D[];
+  style: Viewer25DWallCornerStyle;
+  radius: number;
+  isSoftened: boolean;
+}
+
 export function resolveWallBaseElevationOffset(
   config: Viewer25DGeometryConfig = {},
 ): number {
@@ -107,14 +116,46 @@ export function createSoftenedWallCornerPolygon(
   points: readonly Viewer25DPoint2D[],
   config: Viewer25DGeometryConfig = {},
 ): Viewer25DPoint2D[] {
+  const cornerPaths = createSoftenedWallCornerPaths(points, config);
+  const softenedPolygon: Viewer25DPoint2D[] = [];
+
+  for (const cornerPath of cornerPaths) {
+    for (const point of cornerPath.path) {
+      if (!arePointsEquivalent(softenedPolygon.at(-1), point)) {
+        softenedPolygon.push(point);
+      }
+    }
+  }
+
+  return softenedPolygon;
+}
+
+export function createSoftenedWallCornerPaths(
+  points: readonly Viewer25DPoint2D[],
+  config: Viewer25DGeometryConfig = {},
+): Viewer25DSoftenedCornerPath[] {
   if (points.length < 3) {
-    return [...points];
+    return points.map((point, index) => ({
+      index,
+      originalCorner: point,
+      path: [point],
+      style: config.wallCornerStyle ?? "rounded",
+      radius: resolveWallCornerRadius(config),
+      isSoftened: false,
+    }));
   }
 
   const signedArea = computeSignedArea(points);
 
   if (Math.abs(signedArea) <= PARALLEL_LINE_EPSILON) {
-    return [...points];
+    return points.map((point, index) => ({
+      index,
+      originalCorner: point,
+      path: [point],
+      style: config.wallCornerStyle ?? "rounded",
+      radius: resolveWallCornerRadius(config),
+      isSoftened: false,
+    }));
   }
 
   const resolvedRadius = resolveWallCornerRadius(config);
@@ -123,7 +164,7 @@ export function createSoftenedWallCornerPolygon(
   );
   const wallCornerStyle = config.wallCornerStyle ?? "rounded";
   const winding = signedArea > 0 ? 1 : -1;
-  const softenedPolygon: Viewer25DPoint2D[] = [];
+  const cornerPaths: Viewer25DSoftenedCornerPath[] = [];
 
   for (let index = 0; index < points.length; index += 1) {
     const previous = points[(index - 1 + points.length) % points.length];
@@ -140,18 +181,28 @@ export function createSoftenedWallCornerPolygon(
     );
 
     if (!softenedCorner) {
-      softenedPolygon.push(current);
+      cornerPaths.push({
+        index,
+        originalCorner: current,
+        path: [current],
+        style: wallCornerStyle,
+        radius: resolvedRadius,
+        isSoftened: false,
+      });
       continue;
     }
 
-    for (const point of softenedCorner) {
-      if (!arePointsEquivalent(softenedPolygon.at(-1), point)) {
-        softenedPolygon.push(point);
-      }
-    }
+    cornerPaths.push({
+      index,
+      originalCorner: current,
+      path: dedupeSequentialPathPoints(softenedCorner),
+      style: wallCornerStyle,
+      radius: resolvedRadius,
+      isSoftened: true,
+    });
   }
 
-  return softenedPolygon;
+  return cornerPaths;
 }
 
 function computeSignedArea(points: readonly Viewer25DPoint2D[]): number {
@@ -517,6 +568,18 @@ function arePointsEquivalent(
     Math.abs(left.x - right.x) <= PARALLEL_LINE_EPSILON &&
     Math.abs(left.y - right.y) <= PARALLEL_LINE_EPSILON
   );
+}
+
+function dedupeSequentialPathPoints(
+  points: readonly Viewer25DPoint2D[],
+): Viewer25DPoint2D[] {
+  return points.reduce<Viewer25DPoint2D[]>((result, point) => {
+    if (!arePointsEquivalent(result.at(-1), point)) {
+      result.push(point);
+    }
+
+    return result;
+  }, []);
 }
 
 function normalizeWallCornerSegments(value: number): number {

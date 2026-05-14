@@ -6,6 +6,7 @@ import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
 import {
+  createWallMeshAssembly,
   getGlassMaterialConfig,
   getWallShadingConfig,
 } from "@/features/viewer";
@@ -15,12 +16,14 @@ import {
   DEFAULT_WALL_THICKNESS,
   resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
+  resolveWallBaseElevationOffset,
 } from "./viewer25dGeometry";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
 const FLOOR_COLORS      = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
 const WALL_HEIGHT_SCALE = DEFAULT_WALL_HEIGHT_SCALE;
 const WALL_THICKNESS    = DEFAULT_WALL_THICKNESS;  // world units (~4.5cm at 1:100)
+const WALL_TOP_EDGE_RADIUS = 0.011;
 const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
@@ -248,30 +251,37 @@ function RoomMesh({
   const shape = useMemo(() => polygonToShape(floorPoints), [floorPoints]);
   const wallH = height * WALL_HEIGHT_SCALE;
 
-  // One thin BoxGeometry wall per polygon edge — leaves interior open (no ceiling)
-  const wallSegments = useMemo(() =>
-    points
-      .map((p1, i) => {
-        const p2 = points[(i + 1) % points.length];
-        const x1 = p1.x / 100, z1 = p1.y / 100;
-        const x2 = p2.x / 100, z2 = p2.y / 100;
-        const dx = x2 - x1, dz = z2 - z1;
-        const len = Math.sqrt(dx * dx + dz * dz);
-        const angle = -Math.atan2(dz, dx);   // Y-rotation to align box with edge
-        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle };
-      })
-      .filter(s => s.len > 0.001),
-  [points]);
+  const wallMeshAssembly = useMemo(
+    () =>
+      createWallMeshAssembly(
+        points.map((point) => ({
+          x: point.x / 100,
+          y: point.y / 100,
+        })),
+        {
+          baseOffset: resolveWallBaseElevationOffset(),
+          curveSegments: 6,
+          height: wallH,
+          thickness: WALL_THICKNESS,
+          topEdgeRadius: WALL_TOP_EDGE_RADIUS,
+        },
+      ),
+    [points, wallH],
+  );
 
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
 
   return (
     <group position={[0, floorY * WALL_HEIGHT_SCALE, 0]}>
-      {/* Wall segments — no ceiling */}
-      {wallSegments.map((seg, i) => (
-        <mesh key={i} position={[seg.cx, wallH / 2, seg.cz]} rotation={[0, seg.angle, 0]}>
-          <boxGeometry args={[seg.len, wallH, WALL_THICKNESS]} />
+      {/* Wall assembly — softened segments and corners, no ceiling */}
+      {wallMeshAssembly.meshes.map((wallMesh, index) => (
+        <mesh
+          key={`${wallMesh.source}-${index}`}
+          geometry={wallMesh.geometry}
+          position={wallMesh.position}
+          rotation={wallMesh.rotation}
+        >
           <meshStandardMaterial {...INTERIOR_WALL_SHADING} />
         </mesh>
       ))}
