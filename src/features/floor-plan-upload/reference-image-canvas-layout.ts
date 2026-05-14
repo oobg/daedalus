@@ -1,6 +1,6 @@
 export interface ReferenceImageCanvasLayoutInput {
-  canvasWidth: number;
-  canvasHeight: number;
+  floorSpaceWidth: number;
+  floorSpaceHeight: number;
   imageWidth: number;
   imageHeight: number;
 }
@@ -16,8 +16,10 @@ export interface LockedReferenceImageLayerPolicy {
   layerListening: false;
   imageListening: false;
   imageDraggable: false;
+  editable: false;
   selectable: false;
   movable: false;
+  interceptsPointerEvents: false;
   editableObjectExport: false;
 }
 
@@ -25,32 +27,39 @@ export const LOCKED_REFERENCE_IMAGE_LAYER_POLICY: LockedReferenceImageLayerPolic
   layerListening: false,
   imageListening: false,
   imageDraggable: false,
+  editable: false,
   selectable: false,
   movable: false,
+  interceptsPointerEvents: false,
   editableObjectExport: false,
 };
+
+export const DEFAULT_EDITOR_FLOOR_SPACE = {
+  width: 800,
+  height: 600,
+} as const;
 
 export function calculateReferenceImageCanvasLayout(
   input: ReferenceImageCanvasLayoutInput,
 ): ReferenceImageCanvasLayout | null {
-  const { canvasWidth, canvasHeight, imageWidth, imageHeight } = input;
+  const { floorSpaceWidth, floorSpaceHeight, imageWidth, imageHeight } = input;
 
   if (
-    !isPositiveFinite(canvasWidth) ||
-    !isPositiveFinite(canvasHeight) ||
+    !isPositiveFinite(floorSpaceWidth) ||
+    !isPositiveFinite(floorSpaceHeight) ||
     !isPositiveFinite(imageWidth) ||
     !isPositiveFinite(imageHeight)
   ) {
     return null;
   }
 
-  const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
+  const scale = Math.min(floorSpaceWidth / imageWidth, floorSpaceHeight / imageHeight);
   const width = imageWidth * scale;
   const height = imageHeight * scale;
 
   return {
-    x: (canvasWidth - width) / 2,
-    y: (canvasHeight - height) / 2,
+    x: (floorSpaceWidth - width) / 2,
+    y: (floorSpaceHeight - height) / 2,
     width,
     height,
   };

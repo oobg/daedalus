@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   PROJECT_EXPORT_FORMAT_VERSION,
 } from "../src/features/project-export/export-schema.ts";
+import { DEFAULT_FLOOR_HEIGHT } from "../src/domain/floor.ts";
 import {
   getProjectRelationshipGraph,
 } from "../src/features/project-export/project-relationship-relinker.ts";
@@ -272,4 +273,21 @@ test("restoreStoredProjectState rebuilds runtime relationships from a saved loca
     )?.room,
     restored!.state.project.floors[0].rooms[0],
   );
+});
+
+test("restoreStoredProjectState defaults missing floor heights from older localStorage records", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const serialized = createSerializedProject();
+  delete serialized.floors[0].floorHeight;
+
+  saveProjectToLocalStorage(
+    serialized,
+    storage,
+    new Date("2026-05-13T14:00:00.000Z"),
+  );
+
+  const restored = restoreStoredProjectState(serialized.projectId, storage);
+
+  assert.equal(restored?.state.project.floors[0].height, DEFAULT_FLOOR_HEIGHT);
+  assert.equal(restored?.state.project.floors[1].height, 4);
 });

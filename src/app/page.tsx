@@ -7,7 +7,7 @@ import Toolbar from "@/components/organisms/Toolbar";
 import FloorSidebar from "@/components/organisms/FloorSidebar";
 import PropertyPanel from "@/components/organisms/PropertyPanel";
 import { Button } from "@/components/ui/button";
-import { useEditorStore } from "@/store/editorStore";
+import { useActiveFloorReferenceImageSource, useEditorStore } from "@/store/editorStore";
 import { cn } from "@/lib/utils";
 
 const Canvas2D  = dynamic(() => import("@/components/editor/Canvas2D"),  { ssr: false });
@@ -25,6 +25,7 @@ export default function EditorPage() {
   const activeFloorId   = useEditorStore(s => s.project.viewState.activeFloorId);
   const exteriorPolygon = useEditorStore(s => s.project.exteriorPolygon ?? null);
   const loadFromLocalStorage = useEditorStore(s => s.loadFromLocalStorage);
+  const referenceImageSource = useActiveFloorReferenceImageSource();
 
   useEffect(() => { loadFromLocalStorage(); }, [loadFromLocalStorage]);
 
@@ -116,6 +117,7 @@ export default function EditorPage() {
             <Canvas2D
               width={canvasSize.width}
               height={canvasSize.height}
+              referenceImageSource={referenceImageSource}
               stageRef={stageRef}
             />
           ) : (

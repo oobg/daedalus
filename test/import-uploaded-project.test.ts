@@ -4,11 +4,15 @@ import test from "node:test";
 import {
   importUploadedProject,
 } from "../src/features/project-export/import-uploaded-project.ts";
+import type {
+  SerializedProjectData,
+} from "../src/features/project-export/project-serializer.ts";
 import {
   PROJECT_EXPORT_FORMAT_VERSION,
 } from "../src/features/project-export/export-schema.ts";
+import { DEFAULT_FLOOR_HEIGHT } from "../src/domain/floor.ts";
 
-function createSerializedProject() {
+function createSerializedProject(): SerializedProjectData {
   return {
     projectId: "project-alpha",
     projectName: "Museum Wayfinding",
@@ -90,6 +94,21 @@ test("importUploadedProject extracts and validates the embedded project from an 
     ok: true,
     value: project,
   });
+});
+
+test("importUploadedProject defaults missing floor heights from older project JSON", () => {
+  const project = createSerializedProject();
+  delete project.floors[0].floorHeight;
+
+  const result = importUploadedProject(JSON.stringify(project));
+
+  assert.equal(result.ok, true);
+
+  if (!result.ok) {
+    return;
+  }
+
+  assert.equal(result.value.floors[0].floorHeight, DEFAULT_FLOOR_HEIGHT);
 });
 
 test("importUploadedProject surfaces JSON parsing failures with parse-stage errors", () => {

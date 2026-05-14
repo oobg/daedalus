@@ -6,6 +6,8 @@ import {
   createWallContourOffsets,
   createSoftenedWallCornerPolygon,
   createInsetPolygon,
+  DEFAULT_FLOOR_LAYER_THICKNESS_MAX,
+  DEFAULT_FLOOR_LAYER_THICKNESS_MIN,
   DEFAULT_FLOOR_BASE_OFFSET_MIN,
   DEFAULT_FLOOR_PERIMETER_INSET_MIN,
   DEFAULT_WALL_BASE_OFFSET,
@@ -17,6 +19,7 @@ import {
   resolveFloorPerimeterInset,
   resolveRoomLayerElevations,
   resolveViewer25DFloorExtrusionDepth,
+  resolveViewer25DFloorLayerThickness,
   resolveViewer25DFloorRenderPlacements,
   resolveViewer25DFloorPlacements,
   resolveViewer25DStackExtrusionDepth,
@@ -126,6 +129,33 @@ test("resolveViewer25DFloorExtrusionDepth rejects hardcoded/default fallback inp
   );
 });
 
+test("resolveViewer25DFloorLayerThickness derives room floor slab depth from configured floor height", () => {
+  assert.equal(resolveViewer25DFloorLayerThickness(2.5), 0.0075);
+  assert.equal(resolveViewer25DFloorLayerThickness(4.2), 0.0126);
+});
+
+test("resolveViewer25DFloorLayerThickness clamps only the display-safe extremes", () => {
+  assert.equal(
+    resolveViewer25DFloorLayerThickness(0.5),
+    DEFAULT_FLOOR_LAYER_THICKNESS_MIN,
+  );
+  assert.equal(
+    resolveViewer25DFloorLayerThickness(12),
+    DEFAULT_FLOOR_LAYER_THICKNESS_MAX,
+  );
+});
+
+test("resolveViewer25DFloorLayerThickness rejects non-positive height inputs", () => {
+  assert.throws(
+    () => resolveViewer25DFloorLayerThickness(0),
+    /positive finite floor height/,
+  );
+  assert.throws(
+    () => resolveViewer25DFloorLayerThickness(3, 0),
+    /positive finite number/,
+  );
+});
+
 test("resolveViewer25DStackExtrusionDepth sums per-floor configured extrusion depths", () => {
   const depth = resolveViewer25DStackExtrusionDepth(
     [
@@ -137,6 +167,63 @@ test("resolveViewer25DStackExtrusionDepth sums per-floor configured extrusion de
   );
 
   assert.equal(depth, 3.15);
+});
+
+test("viewer floor rendering preserves relative elevations and thicknesses for mixed floor heights", () => {
+  const floors = [
+    { floorId: "floor-service", floorHeight: 2 },
+    { floorId: "floor-lobby", floorHeight: 5 },
+    { floorId: "floor-office", floorHeight: 3.5 },
+  ];
+  const heightScale = 0.3;
+
+  const renderPlacements = resolveViewer25DFloorRenderPlacements(
+    floors,
+    heightScale,
+  );
+  const renderLayers = floors.map((floor, index) => ({
+    floorId: floor.floorId,
+    renderBaseY: renderPlacements[index].renderVerticalOffset,
+    wallHeight: resolveViewer25DFloorExtrusionDepth(
+      floor.floorHeight,
+      heightScale,
+    ),
+    floorLayerThickness: resolveViewer25DFloorLayerThickness(floor.floorHeight),
+  }));
+
+  assert.deepEqual(renderLayers, [
+    {
+      floorId: "floor-service",
+      renderBaseY: 0,
+      wallHeight: 0.6,
+      floorLayerThickness: 0.006,
+    },
+    {
+      floorId: "floor-lobby",
+      renderBaseY: 0.6,
+      wallHeight: 1.5,
+      floorLayerThickness: 0.015,
+    },
+    {
+      floorId: "floor-office",
+      renderBaseY: 2.1,
+      wallHeight: 1.05,
+      floorLayerThickness: 0.0105,
+    },
+  ]);
+  assert.equal(
+    renderLayers[1].renderBaseY,
+    renderLayers[0].renderBaseY + renderLayers[0].wallHeight,
+  );
+  assert.equal(
+    renderLayers[2].renderBaseY,
+    renderLayers[1].renderBaseY + renderLayers[1].wallHeight,
+  );
+  assert.equal(resolveViewer25DStackExtrusionDepth(floors, heightScale), 3.15);
+  assert.ok(
+    Math.abs(renderLayers[2].renderBaseY + renderLayers[2].wallHeight - 3.15) <
+      1e-12,
+  );
 });
 
 test("resolveFloorPerimeterInset computes a measurable floor setback from wall boundaries", () => {

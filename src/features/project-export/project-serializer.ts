@@ -135,7 +135,7 @@ export interface SerializedVerticalConnector {
 export interface SerializedProjectFloor {
   floorId: string;
   floorName: string;
-  floorHeight: number;
+  floorHeight?: number;
   referenceImage: string | null;
   rooms: SerializedRoom[];
   verticalConnectors: SerializedVerticalConnector[];

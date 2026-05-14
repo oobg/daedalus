@@ -1,6 +1,9 @@
 import { createOuterWallCornerProfile } from "../../features/viewer/wall-corner-profile.ts";
 
 export const DEFAULT_WALL_HEIGHT_SCALE = 0.3;
+export const DEFAULT_FLOOR_LAYER_THICKNESS_SCALE = 0.003;
+export const DEFAULT_FLOOR_LAYER_THICKNESS_MIN = 0.004;
+export const DEFAULT_FLOOR_LAYER_THICKNESS_MAX = 0.018;
 export const DEFAULT_WALL_THICKNESS = 0.045;
 export const DEFAULT_WALL_BASE_OFFSET = 0.014;
 export const DEFAULT_FLOOR_BASE_OFFSET_RATIO = 0.35;
@@ -195,6 +198,29 @@ export function resolveViewer25DFloorExtrusionDepth(
   }
 
   return roundCoordinate(floorHeight * heightScale);
+}
+
+export function resolveViewer25DFloorLayerThickness(
+  floorHeight: number,
+  thicknessScale: number = DEFAULT_FLOOR_LAYER_THICKNESS_SCALE,
+): number {
+  if (!Number.isFinite(floorHeight) || floorHeight <= 0) {
+    throw new Error("Floor layer thickness must be derived from a positive finite floor height.");
+  }
+
+  if (!Number.isFinite(thicknessScale) || thicknessScale <= 0) {
+    throw new Error("Floor layer thickness scale must be a positive finite number.");
+  }
+
+  return roundCoordinate(
+    Math.min(
+      Math.max(
+        floorHeight * thicknessScale,
+        DEFAULT_FLOOR_LAYER_THICKNESS_MIN,
+      ),
+      DEFAULT_FLOOR_LAYER_THICKNESS_MAX,
+    ),
+  );
 }
 
 export function resolveViewer25DStackExtrusionDepth(

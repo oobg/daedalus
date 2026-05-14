@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Grid2x2, FolderOpen, X } from "lucide-react";
 import type { EditorFloor, EditorPoint } from "@/domain/editor-state";
 import { Button } from "@/components/ui/button";
+import { formatViewerFloorMetadata } from "@/features/viewer/viewer-floor-metadata";
 
 const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
 
@@ -128,7 +129,10 @@ export default function ViewPage() {
           <span key={floor.floorId} className="text-[11px] text-text-secondary whitespace-nowrap">
             {floor.floorName}
             <span className="ml-1 text-text-muted tabular-nums">
-              {floor.floorHeight}m · {floor.rooms.length}실
+              {formatViewerFloorMetadata({
+                floorHeight: floor.floorHeight,
+                roomCount: floor.rooms.length,
+              })}
             </span>
           </span>
         ))}

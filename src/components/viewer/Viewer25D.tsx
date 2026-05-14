@@ -31,6 +31,7 @@ import {
   resolveFloorPerimeterInset,
   resolveRoomLayerElevations,
   resolveViewer25DFloorExtrusionDepth,
+  resolveViewer25DFloorLayerThickness,
   resolveViewer25DFloorRenderPlacements,
   resolveViewer25DStackExtrusionDepth,
   type Viewer25DFloorRenderPlacement,
@@ -445,6 +446,7 @@ function RoomMesh({
     [surfaceLayout],
   );
   const wallH = resolveViewer25DFloorExtrusionDepth(height, WALL_HEIGHT_SCALE);
+  const floorLayerThickness = resolveViewer25DFloorLayerThickness(height);
 
   const wallMeshAssembly = useMemo(
     () =>
@@ -483,7 +485,16 @@ function RoomMesh({
 
       {/* Floor plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, floorBaseOffset, 0]}>
-        <shapeGeometry args={[shape]} />
+        <extrudeGeometry
+          args={[
+            shape,
+            {
+              bevelEnabled: false,
+              depth: floorLayerThickness,
+              steps: 1,
+            },
+          ]}
+        />
         <meshLambertMaterial color={color} side={THREE.DoubleSide} />
       </mesh>
 

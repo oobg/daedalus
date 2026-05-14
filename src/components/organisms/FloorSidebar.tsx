@@ -41,6 +41,7 @@ export default function FloorSidebar() {
 
   const importFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef  = useRef<HTMLInputElement>(null);
+  const referenceImageUploadFloorIdRef = useRef<string | null>(null);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [floorHeightInput, setFloorHeightInput] = useState("");
 
@@ -77,8 +78,13 @@ export default function FloorSidebar() {
       return;
     }
 
-    const targetFloorId = activeFloorId;
-    if (!targetFloorId) return;
+    const targetFloorId = referenceImageUploadFloorIdRef.current ?? activeFloorId;
+    referenceImageUploadFloorIdRef.current = null;
+
+    if (!targetFloorId) {
+      e.target.value = "";
+      return;
+    }
 
     try {
       const asset = await saveAcceptedFloorPlanImage(
@@ -180,8 +186,9 @@ export default function FloorSidebar() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] text-text-muted">높이 (m)</label>
+            <label htmlFor="active-floor-height" className="text-[11px] text-text-muted">높이 (m)</label>
             <Input
+              id="active-floor-height"
               type="number"
               min={0.5}
               step={0.5}
@@ -195,7 +202,10 @@ export default function FloorSidebar() {
             variant="secondary"
             size="xs"
             className="w-full justify-start gap-1.5"
-            onClick={() => imageFileRef.current?.click()}
+            onClick={() => {
+              referenceImageUploadFloorIdRef.current = activeFloor.floorId;
+              imageFileRef.current?.click();
+            }}
           >
             <Image size={10} strokeWidth={1.8} />
             {activeFloor.referenceImage ? "도면 이미지 변경" : "도면 이미지 업로드"}
