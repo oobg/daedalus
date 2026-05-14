@@ -9,17 +9,15 @@ export {
   type WallShadingVariant,
 } from "./wall-shading.ts";
 export {
-  createWallProfileOutline,
-  createWallProfileShape,
-  createWallSegmentGeometry,
-  type WallProfileOptions,
-  type WallProfilePoint,
-} from "./wall-profile.ts";
-export {
   getWallColorPalette,
   type WallColorPalette,
   type WallColorPaletteVariant,
 } from "./wall-color-palette.ts";
+export {
+  getWoodAccentShadingConfig,
+  type WoodAccentShadingConfig,
+  type WoodAccentShadingVariant,
+} from "./wood-accent-shading.ts";
 export {
   assertViewerExportCompositionInput,
   validateViewerExportCompositionInput,
