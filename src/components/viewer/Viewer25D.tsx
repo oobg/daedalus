@@ -5,12 +5,22 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
+import { getWallShadingConfig } from "@/features/viewer";
+import { createWallSegmentGeometry } from "@/features/viewer/wall-profile";
+import {
+  DEFAULT_WALL_HEIGHT_SCALE,
+  DEFAULT_WALL_THICKNESS,
+  resolveFloorBaseElevationOffset,
+} from "./viewer25dGeometry";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
 const FLOOR_COLORS      = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
-const WALL_COLOR        = "#B8B3AC";
-const WALL_HEIGHT_SCALE = 0.3;
-const WALL_THICKNESS    = 0.045;  // world units (~4.5cm at 1:100)
+const WALL_HEIGHT_SCALE = DEFAULT_WALL_HEIGHT_SCALE;
+const WALL_THICKNESS    = DEFAULT_WALL_THICKNESS;  // world units (~4.5cm at 1:100)
+const WALL_TOP_EDGE_RADIUS = 0.011;
+const WALL_PROFILE_CURVE_SEGMENTS = 6;
+const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
+const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
@@ -44,7 +54,7 @@ function computeSceneCenter(floors: EditorFloor[]): { x: number; z: number } {
 }
 
 // ── 3D Opening Symbols ────────────────────────────────────────────────────────
-// All symbols sit at y=0.02 inside the RoomMesh group (floor plane at y=0.01).
+// All symbols sit at y=0.02 inside the RoomMesh group above the recessed floor slab.
 // ExtrudeGeometry depth goes in the shape's +Z which, after rotation [-PI/2,0,0],
 // maps to world +Y — so symbols extrude upward.
 
@@ -200,15 +210,24 @@ interface RoomMeshProps {
   openings: RoomOpening[];
   floorY:   number;
   height:   number;
+  floorBaseOffset: number;
   color:    string;
   label:    string;
 }
 
-function RoomMesh({ points, openings, floorY, height, color, label }: RoomMeshProps) {
+function RoomMesh({
+  points,
+  openings,
+  floorY,
+  height,
+  floorBaseOffset,
+  color,
+  label,
+}: RoomMeshProps) {
   const shape = useMemo(() => polygonToShape(points), [points]);
   const wallH = height * WALL_HEIGHT_SCALE;
 
-  // One thin BoxGeometry wall per polygon edge — leaves interior open (no ceiling)
+  // One extruded wall profile per polygon edge — leaves interior open (no ceiling)
   const wallSegments = useMemo(() =>
     points
       .map((p1, i) => {
@@ -217,11 +236,17 @@ function RoomMesh({ points, openings, floorY, height, color, label }: RoomMeshPr
         const x2 = p2.x / 100, z2 = p2.y / 100;
         const dx = x2 - x1, dz = z2 - z1;
         const len = Math.sqrt(dx * dx + dz * dz);
-        const angle = -Math.atan2(dz, dx);   // Y-rotation to align box with edge
-        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle };
+        const angle = Math.atan2(dx, dz);
+        const geometry = createWallSegmentGeometry(len, {
+          thickness: WALL_THICKNESS,
+          height: wallH,
+          topEdgeRadius: WALL_TOP_EDGE_RADIUS,
+          curveSegments: WALL_PROFILE_CURVE_SEGMENTS,
+        });
+        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle, geometry };
       })
       .filter(s => s.len > 0.001),
-  [points]);
+  [points, wallH]);
 
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
@@ -230,14 +255,13 @@ function RoomMesh({ points, openings, floorY, height, color, label }: RoomMeshPr
     <group position={[0, floorY * WALL_HEIGHT_SCALE, 0]}>
       {/* Wall segments — no ceiling */}
       {wallSegments.map((seg, i) => (
-        <mesh key={i} position={[seg.cx, wallH / 2, seg.cz]} rotation={[0, seg.angle, 0]}>
-          <boxGeometry args={[seg.len, wallH, WALL_THICKNESS]} />
-          <meshLambertMaterial color={WALL_COLOR} />
+        <mesh key={i} geometry={seg.geometry} position={[seg.cx, 0, seg.cz]} rotation={[0, seg.angle, 0]}>
+          <meshStandardMaterial {...INTERIOR_WALL_SHADING} />
         </mesh>
       ))}
 
       {/* Floor plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, floorBaseOffset, 0]}>
         <shapeGeometry args={[shape]} />
         <meshLambertMaterial color={color} side={THREE.DoubleSide} />
       </mesh>
@@ -322,18 +346,23 @@ function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
         const x2 = p2.x / 100, z2 = p2.y / 100;
         const dx = x2 - x1, dz = z2 - z1;
         const len = Math.sqrt(dx * dx + dz * dz);
-        const angle = -Math.atan2(dz, dx);
-        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle };
+        const angle = Math.atan2(dx, dz);
+        const geometry = createWallSegmentGeometry(len, {
+          thickness: WALL_THICKNESS * 1.5,
+          height: wallH,
+          topEdgeRadius: WALL_TOP_EDGE_RADIUS * 1.2,
+          curveSegments: WALL_PROFILE_CURVE_SEGMENTS,
+        });
+        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle, geometry };
       })
       .filter(s => s.len > 0.001),
-  [points]);
+  [points, wallH]);
 
   return (
     <group>
       {wallSegments.map((seg, i) => (
-        <mesh key={i} position={[seg.cx, wallH / 2, seg.cz]} rotation={[0, seg.angle, 0]}>
-          <boxGeometry args={[seg.len, wallH, WALL_THICKNESS * 1.5]} />
-          <meshLambertMaterial color="#9A9488" />
+        <mesh key={i} geometry={seg.geometry} position={[seg.cx, 0, seg.cz]} rotation={[0, seg.angle, 0]}>
+          <meshStandardMaterial {...EXTERIOR_WALL_SHADING} />
         </mesh>
       ))}
     </group>
@@ -345,9 +374,17 @@ interface Props {
   floors: EditorFloor[];
   activeFloorId: string | null;
   exteriorPolygon?: EditorPoint[] | null;
+  floorBaseOffset?: number;
 }
 
-export default function Viewer25D({ floors, activeFloorId, exteriorPolygon }: Props) {
+export default function Viewer25D({
+  floors,
+  activeFloorId,
+  exteriorPolygon,
+  floorBaseOffset = resolveFloorBaseElevationOffset({
+    wallThickness: WALL_THICKNESS,
+  }),
+}: Props) {
   const sceneCenter = useMemo(() => computeSceneCenter(floors), [floors]);
 
   let cumulativeY = 0;
@@ -386,6 +423,7 @@ export default function Viewer25D({ floors, activeFloorId, exteriorPolygon }: Pr
                   openings={room.openings ?? []}
                   floorY={y}
                   height={floor.floorHeight}
+                  floorBaseOffset={floorBaseOffset}
                   color={FLOOR_COLORS[colorIndex % FLOOR_COLORS.length]}
                   label={room.roomName}
                 />
