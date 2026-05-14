@@ -66,6 +66,8 @@ export {
   type ValidateViewerExportCompositionInputResult,
   type ViewerExportCompositionValidationIssue,
 } from "./viewer-export-composition-guard.ts";
+export { type RenderSceneData } from "../renderer/renderer-contract.ts";
+export { type RendererPort } from "../renderer/renderer-entrypoint.ts";
 export {
   MAX_APPROVED_FURNITURE_TEXTURE_SET_COUNT,
   MAX_APPROVED_FURNITURE_TRIANGLE_COUNT,
