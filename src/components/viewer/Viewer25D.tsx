@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useCallback, useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, RoundedBox } from "@react-three/drei";
+import { ContactShadows, Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -10,9 +10,15 @@ import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
 import {
+  configureContactShadowSoftness,
+  createContactShadowFootprint,
   createExteriorWallMeshAssembly,
   createWallMeshAssembly,
+  getContactShadowSoftnessPreset,
   getGlassMaterialConfig,
+  resolveContactShadowActivationSettings,
+  resolveContactShadowPlacement,
+  resolveContactShadowRenderState,
   getViewerLightingConfiguration,
   getViewerPresentationPreset,
   getWallShadingConfig,
@@ -120,6 +126,118 @@ function computeSceneBounds(
     width: Math.max(maxX - minX, 2),
     depth: Math.max(maxZ - minZ, 2),
   };
+}
+
+function createShadowFootprints(
+  floors: readonly EditorFloor[],
+  exteriorPolygon: readonly EditorPoint[] | null | undefined,
+  floorBaseOffset: number,
+  wallBaseOffset: number,
+) {
+  const footprints = [];
+  let cumulativeY = 0;
+
+  for (const floor of floors) {
+    const floorY = cumulativeY;
+    cumulativeY += floor.floorHeight;
+
+    for (const room of floor.rooms) {
+      const points = room.roomPolygon.map((point) => ({
+        x: point.x / 100,
+        z: point.y / 100,
+      }));
+      const floorFootprint = createContactShadowFootprint(
+        "floor",
+        points,
+        floorY + floorBaseOffset,
+      );
+      const wallFootprint = createContactShadowFootprint(
+        "wall",
+        points,
+        floorY + wallBaseOffset,
+      );
+
+      if (floorFootprint != null) {
+        footprints.push(floorFootprint);
+      }
+
+      if (wallFootprint != null) {
+        footprints.push(wallFootprint);
+      }
+    }
+  }
+
+  const exteriorFootprint = createContactShadowFootprint(
+    "wall",
+    (exteriorPolygon ?? []).map((point) => ({
+      x: point.x / 100,
+      z: point.y / 100,
+    })),
+    wallBaseOffset,
+  );
+
+  if (exteriorFootprint != null) {
+    footprints.push(exteriorFootprint);
+  }
+
+  return footprints;
+}
+
+function LocalizedContactShadow({
+  footprints,
+  sceneCenter,
+}: {
+  footprints: ReturnType<typeof createShadowFootprints>;
+  sceneCenter: { x: number; z: number };
+}) {
+  const { gl, size } = useThree();
+  const shadowSettings = useMemo(
+    () =>
+      resolveContactShadowActivationSettings({
+        viewportWidth: size.width,
+        devicePixelRatio: gl.getPixelRatio(),
+        hardwareConcurrency:
+          typeof navigator === "undefined" ? null : navigator.hardwareConcurrency,
+        maxTouchPoints:
+          typeof navigator === "undefined" ? null : navigator.maxTouchPoints,
+      }),
+    [gl, size.width],
+  );
+  const placement = useMemo(
+    () => resolveContactShadowPlacement(shadowSettings, footprints),
+    [footprints, shadowSettings],
+  );
+  const renderState = useMemo(
+    () =>
+      resolveContactShadowRenderState(
+        placement,
+        configureContactShadowSoftness(
+          getContactShadowSoftnessPreset("miniatureArchitecture"),
+        ),
+      ),
+    [placement],
+  );
+
+  if (renderState == null) {
+    return null;
+  }
+
+  return (
+    <ContactShadows
+      position={[
+        renderState.position[0] - sceneCenter.x,
+        renderState.position[1],
+        renderState.position[2] - sceneCenter.z,
+      ]}
+      scale={[renderState.scale[0], renderState.scale[1]]}
+      blur={renderState.blur}
+      far={renderState.far}
+      opacity={renderState.opacity}
+      color={renderState.color}
+      resolution={renderState.resolution}
+      frames={renderState.frames}
+    />
+  );
 }
 
 // ── 3D Opening Symbols ────────────────────────────────────────────────────────
@@ -569,6 +687,16 @@ export default function Viewer25D({
     () => computeSceneBounds(floors, exteriorPolygon),
     [exteriorPolygon, floors],
   );
+  const shadowFootprints = useMemo(
+    () =>
+      createShadowFootprints(
+        floors,
+        exteriorPolygon,
+        floorBaseOffset,
+        wallBaseOffset,
+      ),
+    [exteriorPolygon, floorBaseOffset, floors, wallBaseOffset],
+  );
 
   let cumulativeY = 0;
   const floorData = floors.map((floor, i) => {
@@ -621,6 +749,10 @@ export default function Viewer25D({
 
         <Suspense fallback={null}>
           <group position={[-sceneCenter.x, 0, -sceneCenter.z]}>
+            <LocalizedContactShadow
+              footprints={shadowFootprints}
+              sceneCenter={sceneCenter}
+            />
             <RoundedBox
               args={[
                 pedestalWidth,

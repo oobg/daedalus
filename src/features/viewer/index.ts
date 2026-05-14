@@ -21,6 +21,30 @@ export {
   type AmbientOcclusionPresetVariant,
 } from "./ambient-occlusion.ts";
 export {
+  applyContactShadowActivation,
+  getContactShadowActivationPreset,
+  resolveContactShadowActivationSettings,
+  type ContactShadowActivationSettings,
+  type ContactShadowActivationVariant,
+  type ContactShadowCapabilityInput,
+  type ContactShadowElementKind,
+} from "./contact-shadow-activation.ts";
+export {
+  createContactShadowFootprint,
+  resolveContactShadowPlacement,
+  type ContactShadowFootprint,
+  type ContactShadowFootprintPoint,
+  type ContactShadowPlacement,
+  type ContactShadowPlacementOptions,
+} from "./contact-shadow-placement.ts";
+export {
+  configureContactShadowSoftness,
+  getContactShadowSoftnessPreset,
+  resolveContactShadowRenderState,
+  type ContactShadowRenderState,
+  type ContactShadowSoftnessSettings,
+} from "./contact-shadow-softness.ts";
+export {
   createViewerComposition,
   type LoadedViewerScene,
   type ViewerComposition,
