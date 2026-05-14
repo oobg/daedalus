@@ -3,10 +3,30 @@
 // Canvas2D is loaded via dynamic({ ssr: false }) from page.tsx,
 // so direct react-konva imports are safe — no SSR will run this module.
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image, Group } from "react-konva";
-import { useRef, useCallback, useEffect, useState, useMemo } from "react";
-import { useEditorStore, useActiveFloor } from "@/store/editorStore";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import {
+  useActiveFloor,
+  useActiveFloorReferenceImageSource,
+  useEditorStore,
+} from "@/store/editorStore";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { RoomOpeningType, EditorPoint } from "@/domain/editor-state";
+import {
+  ROOM_DRAFT_CLOSE_THRESHOLD,
+  getRoomDraftClosurePreviewPoints,
+  isRoomDraftClosureTargetActive,
+} from "@/features/editor/model/roomDraftPreview";
+import {
+  getSelectedRoomGeometryHandles,
+  insertRoomGeometryEdgeVertex,
+  moveRoomGeometryHandleVertex,
+  removeRoomGeometryHandleVertex,
+  type RoomGeometryHandle,
+} from "@/features/editor/model/roomGeometryHandles";
+import {
+  LOCKED_REFERENCE_IMAGE_LAYER_POLICY,
+  calculateReferenceImageCanvasLayout,
+} from "@/features/floor-plan-upload/reference-image-canvas-layout";
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const ROOM_FILL            = "#DDD8CF";
@@ -17,9 +37,8 @@ const DRAFT_COLOR          = "#7267C0";
 const EXTERIOR_STROKE      = "#7A6B60";
 const VERTEX_FILL          = "#FFFFFF";
 const VERTEX_STROKE        = "#7267C0";
-
-// Auto-close threshold for exterior polygon (pixels)
-const CLOSE_THRESHOLD = 16;
+const EDGE_INSERT_FILL     = "#7267C0";
+const EDGE_INSERT_STROKE   = "#FFFFFF";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,14 +52,30 @@ function applySnap(raw: EditorPoint, from: EditorPoint): EditorPoint {
 }
 
 function useRefImage(src: string | null): HTMLImageElement | null {
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+
   useEffect(() => {
-    if (!src) { imgRef.current = null; return; }
+    if (!src) {
+      setImage(null);
+      return;
+    }
+
+    let isCurrent = true;
     const img = new window.Image();
+    setImage(null);
     img.src = src;
-    img.onload = () => { imgRef.current = img; };
+    img.onload = () => {
+      if (isCurrent) {
+        setImage(img);
+      }
+    };
+
+    return () => {
+      isCurrent = false;
+    };
   }, [src]);
-  return imgRef.current;
+
+  return image;
 }
 
 function pointInPolygon(pt: EditorPoint, poly: EditorPoint[]): boolean {
@@ -55,6 +90,19 @@ function pointInPolygon(pt: EditorPoint, poly: EditorPoint[]): boolean {
     }
   }
   return inside;
+}
+
+function getEdgeMidpoint(
+  points: readonly EditorPoint[],
+  edgeIndex: number,
+): EditorPoint {
+  const start = points[edgeIndex];
+  const end = points[(edgeIndex + 1) % points.length];
+
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
 }
 
 // ── Opening symbol renderers ──────────────────────────────────────────────────
@@ -158,7 +206,8 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   const addOpening      = useEditorStore(s => s.addOpening);
 
   const floor    = useActiveFloor();
-  const refImage = useRefImage(floor?.referenceImage ?? null);
+  const referenceImageSource = useActiveFloorReferenceImageSource();
+  const refImage = useRefImage(referenceImageSource);
 
   // ── Local state ─────────────────────────────────────────────────────────────
   const [cursorPos,  setCursorPos]  = useState<EditorPoint | null>(null);
@@ -185,12 +234,43 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
     return floor.rooms.find(r => pointInPolygon(cursorPos, r.roomPolygon))?.roomId ?? null;
   }, [cursorPos, floor, isOpeningActive]);
 
-  /** True when cursor is close enough to close exterior polygon. */
+  /** True when cursor is close enough to close the active draft polygon. */
   const isNearClose = useMemo(() => {
-    if (activeTool !== "exterior" || !isDrawing || draftPoints.length < 3 || !snappedCursorPos) return false;
-    const f = draftPoints[0];
-    return Math.hypot(snappedCursorPos.x - f.x, snappedCursorPos.y - f.y) < CLOSE_THRESHOLD;
-  }, [activeTool, isDrawing, draftPoints, snappedCursorPos]);
+    if (!isDrawingTool || !isDrawing) return false;
+    return isRoomDraftClosureTargetActive(draftPoints, snappedCursorPos);
+  }, [isDrawingTool, isDrawing, draftPoints, snappedCursorPos]);
+
+  const closurePreviewPoints = useMemo(
+    () => getRoomDraftClosurePreviewPoints(draftPoints, snappedCursorPos),
+    [draftPoints, snappedCursorPos],
+  );
+
+  const closurePreviewFlat = useMemo(
+    () => closurePreviewPoints.flatMap(p => [p.x, p.y]),
+    [closurePreviewPoints],
+  );
+
+  const selectedRoom = useMemo(
+    () => floor?.rooms.find(r => r.roomId === selectedRoomId) ?? null,
+    [floor, selectedRoomId],
+  );
+
+  const canShowClosurePreview =
+    isDrawingTool && isDrawing && closurePreviewFlat.length === 4;
+
+  const draftStroke = activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR;
+  const draftStrokeWidth = activeTool === "exterior" ? 2.5 : 2;
+  const draftDash = activeTool === "exterior" ? [10, 5] : [6, 3];
+  const draftFill = activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR;
+
+  const shouldCommitNearClose = useCallback((point: EditorPoint): boolean => {
+    if (!isDrawingTool || draftPoints.length < 3) return false;
+    return isRoomDraftClosureTargetActive(
+      draftPoints,
+      point,
+      ROOM_DRAFT_CLOSE_THRESHOLD,
+    );
+  }, [isDrawingTool, draftPoints]);
 
   const cursor =
     isDrawingTool ? "crosshair" :
@@ -220,6 +300,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
 
     if (activeTool === "room") {
       if (e.evt.detail === 2 && draftPoints.length >= 3) { commitDraft(); return; }
+      if (shouldCommitNearClose(pos)) { commitDraft(); return; }
       addDraftPoint(pos);
       return;
     }
@@ -227,13 +308,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
     if (activeTool === "exterior") {
       if (e.evt.detail === 2 && draftPoints.length >= 3) { commitDraft(); return; }
       // Auto-close: click near first point
-      if (draftPoints.length >= 3) {
-        const f = draftPoints[0];
-        if (Math.hypot(pos.x - f.x, pos.y - f.y) < CLOSE_THRESHOLD) {
-          commitDraft();
-          return;
-        }
-      }
+      if (shouldCommitNearClose(pos)) { commitDraft(); return; }
       addDraftPoint(pos);
       return;
     }
@@ -250,7 +325,54 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
       }
     }
   }, [activeTool, shiftHeld, draftPoints, addDraftPoint, commitDraft,
-      activeFloorId, floor, addOpening, selectRoom, isOpeningActive]);
+      activeFloorId, floor, addOpening, selectRoom, isOpeningActive, shouldCommitNearClose]);
+
+  const handleRoomVertexDrag = useCallback((
+    handle: RoomGeometryHandle,
+    point: EditorPoint,
+  ) => {
+    if (!activeFloorId || !selectedRoom) return;
+
+    const nextPolygon = moveRoomGeometryHandleVertex(
+      selectedRoom,
+      handle,
+      point,
+    );
+
+    if (nextPolygon === null) return;
+
+    updateRoom(activeFloorId, selectedRoom.roomId, {
+      roomPolygon: nextPolygon,
+    });
+  }, [activeFloorId, selectedRoom, updateRoom]);
+
+  const handleRoomEdgeInsert = useCallback((edgeIndex: number) => {
+    if (!activeFloorId || !selectedRoom) return;
+
+    const nextPolygon = insertRoomGeometryEdgeVertex(
+      selectedRoom,
+      edgeIndex,
+      getEdgeMidpoint(selectedRoom.roomPolygon, edgeIndex),
+    );
+
+    if (nextPolygon === null) return;
+
+    updateRoom(activeFloorId, selectedRoom.roomId, {
+      roomPolygon: nextPolygon,
+    });
+  }, [activeFloorId, selectedRoom, updateRoom]);
+
+  const handleRoomVertexRemove = useCallback((handle: RoomGeometryHandle) => {
+    if (!activeFloorId || !selectedRoom) return;
+
+    const nextPolygon = removeRoomGeometryHandleVertex(selectedRoom, handle);
+
+    if (nextPolygon === null) return;
+
+    updateRoom(activeFloorId, selectedRoom.roomId, {
+      roomPolygon: nextPolygon,
+    });
+  }, [activeFloorId, selectedRoom, updateRoom]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Shift")  setShiftHeld(true);
@@ -278,7 +400,25 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   const hasRooms    = floor.rooms.length > 0;
   const hasExterior = exteriorPolygon && exteriorPolygon.length >= 3;
   const draftFlat   = draftPoints.flatMap(p => [p.x, p.y]);
-  const selectedRoom = floor.rooms.find(r => r.roomId === selectedRoomId);
+  const selectedRoomGeometryHandles = getSelectedRoomGeometryHandles({
+    rooms: floor.rooms,
+    selectedRoomId,
+  });
+  const selectedRoomEdgeHandles = selectedRoom
+    ? selectedRoom.roomPolygon.map((_, edgeIndex) => ({
+        id: `${selectedRoom.roomId}:edge-insert:${edgeIndex}`,
+        edgeIndex,
+        position: getEdgeMidpoint(selectedRoom.roomPolygon, edgeIndex),
+      }))
+    : [];
+  const referenceImageLayout = refImage
+    ? calculateReferenceImageCanvasLayout({
+        canvasWidth: width,
+        canvasHeight: height,
+        imageWidth: refImage.naturalWidth || refImage.width,
+        imageHeight: refImage.naturalHeight || refImage.height,
+      })
+    : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -292,17 +432,29 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
       onMouseLeave={handleMouseLeave}
       style={{ cursor }}
     >
-      <Layer>
+      <Layer listening={LOCKED_REFERENCE_IMAGE_LAYER_POLICY.layerListening}>
         {/* Background */}
-        <Rect x={0} y={0} width={width} height={height} fill="#F7F6F2" />
-
-        {/* Empty state hint */}
-        {!hasRooms && !hasExterior && !isDrawing && <EmptyHint width={width} height={height} />}
+        <Rect x={0} y={0} width={width} height={height} fill="#F7F6F2" listening={false} />
 
         {/* Reference image */}
-        {refImage && (
-          <Image image={refImage} x={0} y={0} width={width} height={height} opacity={0.3} />
+        {refImage && referenceImageLayout && (
+          <Image
+            name="locked-reference-image"
+            image={refImage}
+            x={referenceImageLayout.x}
+            y={referenceImageLayout.y}
+            width={referenceImageLayout.width}
+            height={referenceImageLayout.height}
+            opacity={0.3}
+            listening={LOCKED_REFERENCE_IMAGE_LAYER_POLICY.imageListening}
+            draggable={LOCKED_REFERENCE_IMAGE_LAYER_POLICY.imageDraggable}
+          />
         )}
+      </Layer>
+
+      <Layer>
+        {/* Empty state hint */}
+        {!hasRooms && !hasExterior && !isDrawing && !refImage && <EmptyHint width={width} height={height} />}
 
         {/* Exterior polygon (completed) — drawn below rooms */}
         {hasExterior && activeTool !== "exterior" && (
@@ -369,22 +521,56 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
 
         {/* Vertex drag handles for selected room */}
         {activeTool === "select" && selectedRoom && activeFloorId &&
-          selectedRoom.roomPolygon.map((pt, idx) => (
-            <Circle
-              key={`v-${selectedRoom.roomId}-${idx}`}
-              x={pt.x} y={pt.y} radius={5}
-              fill={VERTEX_FILL} stroke={VERTEX_STROKE} strokeWidth={2}
-              draggable
-              onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "move"; }}
-              onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
-              onDragEnd={e => {
-                const newPoly = selectedRoom.roomPolygon.map((p, i) =>
-                  i === idx ? { x: e.target.x(), y: e.target.y() } : p
-                );
-                updateRoom(activeFloorId, selectedRoom.roomId, { roomPolygon: newPoly });
-              }}
-            />
-          ))
+          <>
+            {selectedRoomEdgeHandles.map((handle) => (
+              <Circle
+                key={handle.id}
+                name="room-edge-insert-handle"
+                x={handle.position.x} y={handle.position.y} radius={4}
+                fill={EDGE_INSERT_FILL} stroke={EDGE_INSERT_STROKE}
+                strokeWidth={1.5}
+                opacity={0.9}
+                onMouseDown={e => { e.cancelBubble = true; }}
+                onClick={e => {
+                  e.cancelBubble = true;
+                  handleRoomEdgeInsert(handle.edgeIndex);
+                }}
+                onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "copy"; }}
+                onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
+              />
+            ))}
+            {selectedRoomGeometryHandles.map((handle) => (
+              <Circle
+                key={handle.id}
+                name="room-geometry-handle"
+                x={handle.position.x} y={handle.position.y} radius={5}
+                fill={VERTEX_FILL} stroke={VERTEX_STROKE} strokeWidth={2}
+                draggable
+                onMouseDown={e => { e.cancelBubble = true; }}
+                onClick={e => { e.cancelBubble = true; }}
+                onDblClick={e => {
+                  e.cancelBubble = true;
+                  handleRoomVertexRemove(handle);
+                }}
+                onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "move"; }}
+                onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
+                onDragMove={e => {
+                  e.cancelBubble = true;
+                  handleRoomVertexDrag(handle, {
+                    x: e.target.x(),
+                    y: e.target.y(),
+                  });
+                }}
+                onDragEnd={e => {
+                  e.cancelBubble = true;
+                  handleRoomVertexDrag(handle, {
+                    x: e.target.x(),
+                    y: e.target.y(),
+                  });
+                }}
+              />
+            ))}
+          </>
         }
 
         {/* Opening placement preview */}
@@ -399,9 +585,9 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
             {draftPoints.length >= 2 && (
               <Line
                 points={draftFlat}
-                stroke={activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR}
-                strokeWidth={activeTool === "exterior" ? 2.5 : 2}
-                dash={activeTool === "exterior" ? [10, 5] : [6, 3]}
+                stroke={draftStroke}
+                strokeWidth={draftStrokeWidth}
+                dash={draftDash}
                 listening={false}
               />
             )}
@@ -415,10 +601,22 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                   snappedCursorPos.x,
                   snappedCursorPos.y,
                 ]}
-                stroke={activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR}
+                stroke={draftStroke}
                 strokeWidth={1.5}
                 dash={[4, 4]}
                 opacity={0.5}
+                listening={false}
+              />
+            )}
+
+            {/* Closure preview — cursor to first point once the room can be closed */}
+            {canShowClosurePreview && (
+              <Line
+                points={closurePreviewFlat}
+                stroke={draftStroke}
+                strokeWidth={isNearClose ? draftStrokeWidth : 1.25}
+                dash={isNearClose ? draftDash : [3, 5]}
+                opacity={isNearClose ? 0.75 : 0.35}
                 listening={false}
               />
             )}
@@ -432,8 +630,8 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                   key={i}
                   x={p.x} y={p.y}
                   radius={closeHighlight ? 8 : 4}
-                  fill={closeHighlight ? "rgba(74,124,111,0.25)" : (activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR)}
-                  stroke={activeTool === "exterior" ? EXTERIOR_STROKE : DRAFT_COLOR}
+                  fill={closeHighlight ? "rgba(74,124,111,0.25)" : draftFill}
+                  stroke={draftStroke}
                   strokeWidth={closeHighlight ? 2 : 0}
                   listening={false}
                 />

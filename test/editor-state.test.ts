@@ -14,6 +14,7 @@ import {
   createEditorProject,
   createEditorRoom,
   createEditorState,
+  deriveRoomWallsFromPolygon,
   removeEditorRoom,
   removeEditorFloor,
   updateEditorRoom,
@@ -63,6 +64,7 @@ test("createEditorRoom initializes polygon-based room state with derived metadat
       x: 4,
       y: 2,
     },
+    openings: [],
   });
 });
 
@@ -78,6 +80,19 @@ test("createEditorFloor applies defaults for floor metadata without rendering de
     referenceImage: null,
     rooms: [],
   });
+});
+
+test("createEditorFloor rejects non-positive or non-finite floor heights", () => {
+  for (const floorHeight of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(
+      () =>
+        createEditorFloor({
+          floorId: `floor-${String(floorHeight)}`,
+          floorHeight,
+        }),
+      /Floor height must be a positive finite number\./,
+    );
+  }
 });
 
 test("createEditorState builds a mutable cloned editor tree for project, floors, and rooms", () => {
@@ -133,6 +148,7 @@ test("createEditorState builds a mutable cloned editor tree for project, floors,
                 x: 3,
                 y: 2.5,
               },
+              openings: [],
             },
           ],
         },
@@ -141,6 +157,7 @@ test("createEditorState builds a mutable cloned editor tree for project, floors,
         activeFloorId: "floor-1",
         selectedRoomId: null,
       },
+      exteriorPolygon: null,
     },
   });
 
@@ -165,8 +182,128 @@ test("createEditorState supplies safe defaults when optional project fields are 
         activeFloorId: null,
         selectedRoomId: null,
       },
+      exteriorPolygon: null,
     },
   });
+});
+
+test("createEditorState can carry editor-domain metadata and guide objects independent of exports", () => {
+  const state = createEditorState({
+    projectId: "project-guide-model",
+    projectName: "Guide Model",
+    metadata: {
+      authorName: "Facilities",
+      notes: "Internal source model",
+    },
+    floors: [
+      {
+        floorId: "floor-1",
+        metadata: {
+          notes: "Surveyed from uploaded plan",
+        },
+        rooms: [
+          {
+            roomId: "room-1",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 10, y: 0 },
+              { x: 10, y: 10 },
+              { x: 0, y: 10 },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "opening-1",
+                openingType: "door",
+                attachedEdgeId: "room-1:edge:1",
+                edgeRelativePosition: 0.5,
+              },
+            ],
+            metadata: {
+              notes: "Primary editable room polygon",
+            },
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-stair-1",
+            connectorType: "stair",
+            roomId: "room-1",
+            targetFloorId: "floor-2",
+            position: { x: 2, y: 2 },
+          },
+        ],
+        guideObjects: [
+          {
+            guideObjectId: "guide-object-info-1",
+            guideObjectType: "point-of-interest",
+            floorId: "floor-1",
+            roomId: "room-1",
+            name: "Information Desk",
+            position: { x: 5, y: 5 },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(state.project.metadata, {
+    authorName: "Facilities",
+    notes: "Internal source model",
+  });
+  assert.deepEqual(state.project.floors[0].verticalConnectors, [
+    {
+      connectorId: "connector-stair-1",
+      connectorType: "stair",
+      roomId: "room-1",
+      targetFloorId: "floor-2",
+      position: { x: 2, y: 2 },
+    },
+  ]);
+  assert.deepEqual(state.project.floors[0].guideObjects, [
+    {
+      guideObjectId: "guide-object-info-1",
+      guideObjectType: "point-of-interest",
+      floorId: "floor-1",
+      roomId: "room-1",
+      name: "Information Desk",
+      position: { x: 5, y: 5 },
+    },
+  ]);
+  assert.deepEqual(state.project.floors[0].rooms[0].edgeOpenings, [
+    {
+      openingId: "opening-1",
+      openingType: "door",
+      attachedEdgeId: "room-1:edge:1",
+      edgeRelativePosition: 0.5,
+    },
+  ]);
+});
+
+test("deriveRoomWallsFromPolygon creates visual wall segments from room polygon edges", () => {
+  const walls = deriveRoomWallsFromPolygon("room-1", [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 4, y: 3 },
+    { x: 0, y: 0 },
+  ]);
+
+  assert.deepEqual(walls, [
+    {
+      edgeId: "room-1:edge:0",
+      start: { x: 0, y: 0 },
+      end: { x: 4, y: 0 },
+    },
+    {
+      edgeId: "room-1:edge:1",
+      start: { x: 4, y: 0 },
+      end: { x: 4, y: 3 },
+    },
+    {
+      edgeId: "room-1:edge:2",
+      start: { x: 4, y: 3 },
+      end: { x: 0, y: 0 },
+    },
+  ]);
 });
 
 test("createEditorState falls back to the first floor when the requested active floor is missing", () => {
@@ -360,6 +497,27 @@ test("updateEditorFloor updates only the targeted floor metadata", () => {
   assert.deepEqual(nextProject.viewState, project.viewState);
 });
 
+test("updateEditorFloor rejects non-positive or non-finite floor heights", () => {
+  const project = createEditorProject({
+    projectId: "project-invalid-floor-height",
+    floors: [
+      {
+        floorId: "floor-1",
+        floorHeight: 3,
+      },
+    ],
+  });
+
+  for (const floorHeight of [0, -1, Number.NaN, Number.NEGATIVE_INFINITY]) {
+    assert.throws(
+      () => updateEditorFloor(project, "floor-1", { floorHeight }),
+      /Floor height must be a positive finite number\./,
+    );
+  }
+
+  assert.equal(project.floors[0].floorHeight, 3);
+});
+
 test("removeEditorFloor removes an inactive floor without disturbing the active floor", () => {
   const project = createEditorProject({
     projectId: "project-remove-inactive",
@@ -519,6 +677,7 @@ test("addEditorRoom appends a derived room only to the targeted floor", () => {
       x: 2.5,
       y: 1,
     },
+    openings: [],
   });
   assert.deepEqual(nextProject.viewState, project.viewState);
 });
@@ -611,6 +770,7 @@ test("updateEditorRoom recalculates derived metadata only for the edited room wh
       x: 3,
       y: 1.5,
     },
+    openings: [],
   });
 });
 
@@ -696,6 +856,77 @@ test("updateEditorRoom mirrors a moved shared-boundary vertex into the exactly a
   ]);
 });
 
+test("updateEditorRoom preserves room openings while dragging polygon vertices", () => {
+  const project = createEditorProject({
+    projectId: "project-room-vertex-opening-preservation",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Reception",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 4 },
+              { x: 0, y: 4 },
+            ],
+            openings: [
+              {
+                id: "opening-1",
+                type: "door",
+                x: 2,
+                y: 0,
+                angle: 0,
+              },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "edge-opening-1",
+                openingType: "door",
+                attachedEdgeId: "room-1:north",
+                edgeRelativePosition: 0.5,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const nextProject = updateEditorRoom(project, "floor-1", "room-1", {
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 5, y: 1 },
+      { x: 4, y: 4 },
+      { x: 0, y: 4 },
+    ],
+  });
+
+  assert.deepEqual(nextProject.floors[0].rooms[0].openings, [
+    {
+      id: "opening-1",
+      type: "door",
+      x: 2,
+      y: 0,
+      angle: 0,
+    },
+  ]);
+  assert.deepEqual(nextProject.floors[0].rooms[0].edgeOpenings, [
+    {
+      openingId: "edge-opening-1",
+      openingType: "door",
+      attachedEdgeId: "room-1:north",
+      edgeRelativePosition: 0.5,
+    },
+  ]);
+  assert.notEqual(
+    nextProject.floors[0].rooms[0].openings,
+    project.floors[0].rooms[0].openings,
+  );
+});
+
 test("updateEditorRoom keeps a moved shared segment geometrically identical in both adjacent rooms", () => {
   const project = createEditorProject({
     projectId: "project-shared-segment-sync",
@@ -777,6 +1008,150 @@ test("updateEditorRoom keeps a moved shared segment geometrically identical in b
     x: 6.5,
     y: 2.5,
   });
+});
+
+test("updateEditorRoom mirrors an inserted shared-boundary vertex into the adjacent room", () => {
+  const project = createEditorProject({
+    projectId: "project-shared-edge-insert",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Reception",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 4 },
+              { x: 0, y: 4 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-1:east",
+                roomId: "room-1",
+                adjacentRoomId: "room-2",
+                adjacentEdgeId: "room-2:west",
+              },
+            ],
+          },
+          {
+            roomId: "room-2",
+            roomName: "Office",
+            roomPolygon: [
+              { x: 4, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 4 },
+              { x: 4, y: 4 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-2:west",
+                roomId: "room-2",
+                adjacentRoomId: "room-1",
+                adjacentEdgeId: "room-1:east",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const nextProject = updateEditorRoom(project, "floor-1", "room-1", {
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 2 },
+      { x: 4, y: 4 },
+      { x: 0, y: 4 },
+    ],
+  });
+
+  assert.deepEqual(nextProject.floors[0].rooms[1].roomPolygon, [
+    { x: 4, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 4 },
+    { x: 4, y: 2 },
+  ]);
+  assert.equal(nextProject.floors[0].rooms[0].area, 16);
+  assert.equal(nextProject.floors[0].rooms[1].area, 16);
+  assert.deepEqual(project.floors[0].rooms[1].roomPolygon, [
+    { x: 4, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 4 },
+  ]);
+});
+
+test("updateEditorRoom mirrors a removed shared-boundary vertex into the adjacent room", () => {
+  const project = createEditorProject({
+    projectId: "project-shared-edge-delete",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Reception",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 2 },
+              { x: 4, y: 4 },
+              { x: 0, y: 4 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-1:east",
+                roomId: "room-1",
+                adjacentRoomId: "room-2",
+                adjacentEdgeId: "room-2:west",
+              },
+            ],
+          },
+          {
+            roomId: "room-2",
+            roomName: "Office",
+            roomPolygon: [
+              { x: 4, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 4 },
+              { x: 4, y: 4 },
+              { x: 4, y: 2 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-2:west",
+                roomId: "room-2",
+                adjacentRoomId: "room-1",
+                adjacentEdgeId: "room-1:east",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const nextProject = updateEditorRoom(project, "floor-1", "room-1", {
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 4 },
+      { x: 0, y: 4 },
+    ],
+  });
+
+  assert.deepEqual(nextProject.floors[0].rooms[1].roomPolygon, [
+    { x: 4, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 4 },
+  ]);
+  assert.equal(nextProject.floors[0].rooms[0].area, 16);
+  assert.equal(nextProject.floors[0].rooms[1].area, 16);
 });
 
 test("updateEditorRoom updates only declared shared-vertex rooms and preserves untouched adjacent geometry", () => {

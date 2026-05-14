@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type {
@@ -21,6 +22,12 @@ import {
   removeEditorRoom,
   updateEditorProject,
 } from "@/domain/editor-state";
+import { captureRoomPolygonCanvasClick } from "@/features/editor/model/roomPolygonDrawingMode";
+import { resolveFloorReferenceImageSource } from "@/features/floor-plan-upload/resolve-floor-reference-image-source";
+import {
+  collectRoomDraftPoints,
+  finalizeEditorRoomDraft,
+} from "@/features/editor/model/roomDraft";
 
 export type ToolType = "select" | "room" | "exterior" | "door" | "window" | "stair" | "elevator";
 
@@ -48,7 +55,8 @@ interface EditorStoreState {
   removeRoom: (floorId: string, roomId: string) => void;
   selectRoom: (roomId: string | null) => void;
 
-  setReferenceImage: (floorId: string, dataUrl: string | null) => void;
+  setFloorReferenceImage: (floorId: string, dataUrl: string | null) => void;
+  setActiveFloorReferenceImage: (dataUrl: string | null) => void;
 
   addOpening: (floorId: string, roomId: string, type: RoomOpeningType, x: number, y: number) => void;
   removeOpening: (floorId: string, roomId: string, openingId: string) => void;
@@ -105,7 +113,21 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   addDraftPoint: (point) => {
     const { activeTool, draftPoints } = get();
-    if (activeTool !== "room" && activeTool !== "exterior") return;
+    if (activeTool === "room") {
+      const capture = captureRoomPolygonCanvasClick({
+        activeTool,
+        isDrawing: get().isDrawing,
+        draftPoints,
+      }, point);
+
+      set({
+        isDrawing: capture.state.isDrawing,
+        draftPoints: [...capture.state.draftPoints],
+      });
+      return;
+    }
+
+    if (activeTool !== "exterior") return;
     set({ isDrawing: true, draftPoints: [...draftPoints, point] });
   },
 
@@ -128,13 +150,18 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
     if (!activeFloorId) return;
     const roomCount = project.floors.find(f => f.floorId === activeFloorId)?.rooms.length ?? 0;
     const roomId = nanoid();
+    const roomName = `Room ${roomCount + 1}`;
+    const roomDraft = collectRoomDraftPoints(roomId, draftPoints);
+    let roomInput: ReturnType<typeof finalizeEditorRoomDraft>;
+
+    try {
+      roomInput = finalizeEditorRoomDraft(roomDraft, roomName);
+    } catch {
+      return;
+    }
+
     set({
-      project: addEditorRoom(project, activeFloorId, {
-        roomId,
-        roomName: `Room ${roomCount + 1}`,
-        roomPolygon: draftPoints,
-        sharedBoundaries: [],
-      }),
+      project: addEditorRoom(project, activeFloorId, roomInput),
       isDrawing: false,
       draftPoints: [],
     });
@@ -156,8 +183,15 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
     set({ project: updateEditorProject(get().project, { viewState: { selectedRoomId: roomId } }) });
   },
 
-  setReferenceImage: (floorId, dataUrl) => {
+  setFloorReferenceImage: (floorId, dataUrl) => {
     set({ project: updateEditorFloor(get().project, floorId, { referenceImage: dataUrl }) });
+  },
+
+  setActiveFloorReferenceImage: (dataUrl) => {
+    const activeFloorId = get().project.viewState.activeFloorId;
+    if (!activeFloorId) return;
+
+    get().setFloorReferenceImage(activeFloorId, dataUrl);
   },
 
   addOpening: (floorId, roomId, type, x, y) => {
@@ -273,6 +307,22 @@ export function useActiveFloor(): EditorFloor | null {
     const id = s.project.viewState.activeFloorId;
     return s.project.floors.find(f => f.floorId === id) ?? null;
   });
+}
+
+export function useActiveFloorReferenceImageSource(): string | null {
+  const floor = useActiveFloor();
+  const [source, setSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setSource(null);
+      return;
+    }
+
+    setSource(resolveFloorReferenceImageSource({ floor }, window.localStorage));
+  }, [floor?.floorId, floor?.referenceImage]);
+
+  return source;
 }
 
 export function useSelectedRoom(): EditorRoom | null {

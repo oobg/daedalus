@@ -4,6 +4,7 @@ import {
   type EditorRoomInput,
   type RoomLabelPosition,
   type RoomOpening,
+  type EditorOpening,
   type SharedBoundaryRef,
 } from "./editor-state.ts";
 
@@ -111,7 +112,12 @@ export function createValidatedEditorRoom(input: EditorRoomInput): EditorRoom {
     sharedBoundaries,
     area: calculatePolygonArea(roomPolygon),
     labelPosition: calculatePolygonLabelPosition(roomPolygon),
-    openings: ((input as { openings?: RoomOpening[] }).openings ?? []),
+    openings: cloneRoomOpenings(input.openings ?? []),
+    ...optionalArrayField(
+      "edgeOpenings",
+      cloneEdgeOpenings(input.edgeOpenings ?? []),
+    ),
+    ...optionalMetadataField(input.metadata),
   };
 }
 
@@ -230,6 +236,38 @@ function cloneSharedBoundaries(
     adjacentRoomId: boundary.adjacentRoomId,
     adjacentEdgeId: boundary.adjacentEdgeId,
   }));
+}
+
+function cloneRoomOpenings(openings: readonly RoomOpening[]): RoomOpening[] {
+  return openings.map((opening) => ({
+    id: opening.id,
+    type: opening.type,
+    x: opening.x,
+    y: opening.y,
+    angle: opening.angle,
+  }));
+}
+
+function cloneEdgeOpenings(openings: readonly EditorOpening[]): EditorOpening[] {
+  return openings.map((opening) => ({
+    openingId: opening.openingId,
+    openingType: opening.openingType,
+    attachedEdgeId: opening.attachedEdgeId,
+    edgeRelativePosition: opening.edgeRelativePosition,
+  }));
+}
+
+function optionalArrayField<TKey extends string, TValue>(
+  key: TKey,
+  value: TValue[],
+): Record<TKey, TValue[]> | object {
+  return value.length > 0 ? { [key]: value } as Record<TKey, TValue[]> : {};
+}
+
+function optionalMetadataField(
+  metadata: EditorRoomInput["metadata"],
+): { metadata: NonNullable<EditorRoomInput["metadata"]> } | object {
+  return metadata == null ? {} : { metadata: { ...metadata } };
 }
 
 function normalizeRequiredString(value: unknown): string | null {
