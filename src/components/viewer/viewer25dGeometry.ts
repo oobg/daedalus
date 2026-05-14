@@ -55,6 +55,21 @@ export interface Viewer25DWallTopologyValidationResult {
   points: Viewer25DPoint2D[];
 }
 
+export interface Viewer25DPlacementBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export interface Viewer25DFurnitureFootprintClearanceResult {
+  placementBounds: Viewer25DPlacementBounds | null;
+  adjustedFootprint: Viewer25DPoint2D[] | null;
+  clearanceMargin: number;
+  safeInteriorFootprint: Viewer25DPoint2D[];
+  fitsWithinClearance: boolean;
+}
+
 export interface Viewer25DSoftenedCornerPath {
   index: number;
   originalCorner: Viewer25DPoint2D;
@@ -414,6 +429,99 @@ export function createWallContourOffsets(
   };
 }
 
+export function resolveFurnitureFootprintClearance(
+  roomPolygon: readonly Viewer25DPoint2D[],
+  footprint: readonly Viewer25DPoint2D[],
+  clearanceMargin: number,
+): Viewer25DFurnitureFootprintClearanceResult {
+  const normalizedRoomPolygon = normalizePolygonTopology(roomPolygon);
+  const normalizedFootprint = normalizePolygonTopology(footprint);
+
+  if (
+    normalizedRoomPolygon.length < 3 ||
+    normalizedFootprint.length < 3 ||
+    clearanceMargin < 0
+  ) {
+    return {
+      placementBounds: null,
+      adjustedFootprint: null,
+      clearanceMargin,
+      safeInteriorFootprint: [],
+      fitsWithinClearance: false,
+    };
+  }
+
+  const safeInteriorFootprint = createInsetPolygon(
+    normalizedRoomPolygon,
+    clearanceMargin,
+  );
+
+  if (safeInteriorFootprint.length < 3) {
+    return {
+      placementBounds: null,
+      adjustedFootprint: null,
+      clearanceMargin,
+      safeInteriorFootprint,
+      fitsWithinClearance: false,
+    };
+  }
+
+  const safeBounds = calculateBounds(safeInteriorFootprint);
+  const footprintBounds = calculateBounds(normalizedFootprint);
+  const footprintCenter = {
+    x: (footprintBounds.minX + footprintBounds.maxX) / 2,
+    y: (footprintBounds.minY + footprintBounds.maxY) / 2,
+  };
+  const centerOffset = {
+    minX: footprintCenter.x - footprintBounds.minX,
+    maxX: footprintBounds.maxX - footprintCenter.x,
+    minY: footprintCenter.y - footprintBounds.minY,
+    maxY: footprintBounds.maxY - footprintCenter.y,
+  };
+  const placementBounds = {
+    minX: roundCoordinate(safeBounds.minX + centerOffset.minX),
+    maxX: roundCoordinate(safeBounds.maxX - centerOffset.maxX),
+    minY: roundCoordinate(safeBounds.minY + centerOffset.minY),
+    maxY: roundCoordinate(safeBounds.maxY - centerOffset.maxY),
+  };
+
+  if (
+    placementBounds.minX > placementBounds.maxX + PARALLEL_LINE_EPSILON ||
+    placementBounds.minY > placementBounds.maxY + PARALLEL_LINE_EPSILON
+  ) {
+    return {
+      placementBounds: null,
+      adjustedFootprint: null,
+      clearanceMargin,
+      safeInteriorFootprint,
+      fitsWithinClearance: false,
+    };
+  }
+
+  const clampedCenter = {
+    x: clamp(footprintCenter.x, placementBounds.minX, placementBounds.maxX),
+    y: clamp(footprintCenter.y, placementBounds.minY, placementBounds.maxY),
+  };
+  const translation = {
+    x: clampedCenter.x - footprintCenter.x,
+    y: clampedCenter.y - footprintCenter.y,
+  };
+  const adjustedFootprint = normalizedFootprint.map((point) =>
+    roundPoint({
+      x: point.x + translation.x,
+      y: point.y + translation.y,
+    }),
+  );
+
+  return {
+    placementBounds,
+    adjustedFootprint,
+    clearanceMargin,
+    safeInteriorFootprint,
+    fitsWithinClearance: true,
+  };
+}
+
 function createParallelPolygon(
   points: readonly Viewer25DPoint2D[],
   offset: number,
@@ -588,6 +696,29 @@ function normalizeWallCornerSegments(value: number): number {
   }
 
   return Math.floor(value);
+}
+
+function calculateBounds(
+  points: readonly Viewer25DPoint2D[],
+): Viewer25DPlacementBounds {
+  return points.reduce<Viewer25DPlacementBounds>(
+    (bounds, point) => ({
+      minX: Math.min(bounds.minX, point.x),
+      minY: Math.min(bounds.minY, point.y),
+      maxX: Math.max(bounds.maxX, point.x),
+      maxY: Math.max(bounds.maxY, point.y),
+    }),
+    {
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    },
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function normalizePolygonTopology(

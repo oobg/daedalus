@@ -11,6 +11,7 @@ import {
   DEFAULT_WALL_CORNER_RADIUS_MIN,
   DEFAULT_WALL_THICKNESS,
   inspectWallTopology,
+  resolveFurnitureFootprintClearance,
   resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
   validateWallTopology,
@@ -211,6 +212,98 @@ test("createWallContourOffsets rejects floor-gap clearances that consume the ful
       ),
     /Wall thickness must be greater than the floor-gap clearance/,
   );
+});
+
+test("resolveFurnitureFootprintClearance preserves a centered footprint while exposing wall-safe placement bounds", () => {
+  const clearance = resolveFurnitureFootprintClearance(
+    [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 4 },
+      { x: 0, y: 4 },
+    ],
+    [
+      { x: 2, y: 1.5 },
+      { x: 4, y: 1.5 },
+      { x: 4, y: 2.5 },
+      { x: 2, y: 2.5 },
+    ],
+    0.5,
+  );
+
+  assert.equal(clearance.fitsWithinClearance, true);
+  assert.deepEqual(clearance.placementBounds, {
+    minX: 1.5,
+    maxX: 4.5,
+    minY: 1,
+    maxY: 3,
+  });
+  assert.deepEqual(clearance.adjustedFootprint, [
+    { x: 2, y: 1.5 },
+    { x: 4, y: 1.5 },
+    { x: 4, y: 2.5 },
+    { x: 2, y: 2.5 },
+  ]);
+});
+
+test("resolveFurnitureFootprintClearance shifts a near-wall footprint back inside the wall-safe placement envelope", () => {
+  const clearance = resolveFurnitureFootprintClearance(
+    [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 4 },
+      { x: 0, y: 4 },
+    ],
+    [
+      { x: 0.2, y: 0.3 },
+      { x: 2.2, y: 0.3 },
+      { x: 2.2, y: 1.3 },
+      { x: 0.2, y: 1.3 },
+    ],
+    0.5,
+  );
+
+  assert.equal(clearance.fitsWithinClearance, true);
+  assert.deepEqual(clearance.placementBounds, {
+    minX: 1.5,
+    maxX: 4.5,
+    minY: 1,
+    maxY: 3,
+  });
+  assert.deepEqual(clearance.adjustedFootprint, [
+    { x: 0.5, y: 0.5 },
+    { x: 2.5, y: 0.5 },
+    { x: 2.5, y: 1.5 },
+    { x: 0.5, y: 1.5 },
+  ]);
+});
+
+test("resolveFurnitureFootprintClearance reports too-tight rooms when the clearance margin leaves no valid placement envelope", () => {
+  const clearance = resolveFurnitureFootprintClearance(
+    [
+      { x: 0, y: 0 },
+      { x: 2.4, y: 0 },
+      { x: 2.4, y: 2 },
+      { x: 0, y: 2 },
+    ],
+    [
+      { x: 0.2, y: 0.5 },
+      { x: 2.2, y: 0.5 },
+      { x: 2.2, y: 1.5 },
+      { x: 0.2, y: 1.5 },
+    ],
+    0.5,
+  );
+
+  assert.equal(clearance.fitsWithinClearance, false);
+  assert.equal(clearance.placementBounds, null);
+  assert.equal(clearance.adjustedFootprint, null);
+  assert.deepEqual(clearance.safeInteriorFootprint, [
+    { x: 0.5, y: 0.5 },
+    { x: 1.9, y: 0.5 },
+    { x: 1.9, y: 1.5 },
+    { x: 0.5, y: 1.5 },
+  ]);
 });
 
 test("inspectWallTopology flags self-intersecting wall loops after offset joins", () => {

@@ -56,3 +56,12 @@ export {
   type ValidateViewerExportCompositionInputResult,
   type ViewerExportCompositionValidationIssue,
 } from "./viewer-export-composition-guard.ts";
+export {
+  MAX_APPROVED_FURNITURE_TEXTURE_SET_COUNT,
+  MAX_APPROVED_FURNITURE_TRIANGLE_COUNT,
+  validateFurnitureAssetMetadata,
+  type FurnitureAssetClassificationReason,
+  type FurnitureAssetClassificationReasonCode,
+  type FurnitureAssetMetadata,
+  type FurnitureAssetMetadataValidationResult,
+} from "./furniture-asset-metadata.ts";
