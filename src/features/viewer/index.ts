@@ -9,6 +9,11 @@ export {
   type ViewerComposition,
 } from "./viewer-composition.ts";
 export {
+  createExteriorWallMeshAssembly,
+  getExteriorWallMeshOptions,
+  type ExteriorWallMeshInput,
+} from "./exterior-wall-mesh.ts";
+export {
   getWallShadingConfig,
   type WallShadingConfig,
   type WallShadingVariant,
@@ -83,3 +88,8 @@ export {
   type FurnitureAssetGeometryMetrics,
   type FurnitureAssetGeometryMetricsOptions,
 } from "./furniture-geometry-metrics.ts";
+export {
+  getViewerPresentationPreset,
+  type ViewerPresentationPreset,
+  type ViewerPresentationPresetVariant,
+} from "./viewer-presentation.ts";

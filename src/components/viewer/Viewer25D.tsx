@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useCallback, useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html } from "@react-three/drei";
+import { OrbitControls, Html, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -10,8 +10,10 @@ import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
 import {
+  createExteriorWallMeshAssembly,
   createWallMeshAssembly,
   getGlassMaterialConfig,
+  getViewerPresentationPreset,
   getWallShadingConfig,
 } from "@/features/viewer";
 import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
@@ -34,6 +36,7 @@ const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
 const AMBIENT_LIGHTING = getAmbientLightingPreset();
+const VIEWER_PRESENTATION = getViewerPresentationPreset();
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
@@ -64,6 +67,57 @@ function computeSceneCenter(floors: EditorFloor[]): { x: number; z: number } {
       }
   if (!isFinite(minX)) return { x: 0, z: 0 };
   return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
+}
+
+function computeSceneBounds(
+  floors: EditorFloor[],
+  exteriorPolygon?: EditorPoint[] | null,
+): { minX: number; maxX: number; minZ: number; maxZ: number; width: number; depth: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  const trackPoint = (point: EditorPoint) => {
+    const worldX = point.x / 100;
+    const worldZ = point.y / 100;
+    minX = Math.min(minX, worldX);
+    maxX = Math.max(maxX, worldX);
+    minZ = Math.min(minZ, worldZ);
+    maxZ = Math.max(maxZ, worldZ);
+  };
+
+  for (const floor of floors) {
+    for (const room of floor.rooms) {
+      for (const point of room.roomPolygon) {
+        trackPoint(point);
+      }
+    }
+  }
+
+  for (const point of exteriorPolygon ?? []) {
+    trackPoint(point);
+  }
+
+  if (!isFinite(minX) || !isFinite(minZ)) {
+    return {
+      minX: -1,
+      maxX: 1,
+      minZ: -1,
+      maxZ: 1,
+      width: 2,
+      depth: 2,
+    };
+  }
+
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    width: Math.max(maxX - minX, 2),
+    depth: Math.max(maxZ - minZ, 2),
+  };
 }
 
 // ── 3D Opening Symbols ────────────────────────────────────────────────────────
@@ -448,26 +502,29 @@ interface ExteriorWallProps {
 
 function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
   const wallH = totalHeight * WALL_HEIGHT_SCALE;
-
-  const wallSegments = useMemo(() =>
-    points
-      .map((p1, i) => {
-        const p2 = points[(i + 1) % points.length];
-        const x1 = p1.x / 100, z1 = p1.y / 100;
-        const x2 = p2.x / 100, z2 = p2.y / 100;
-        const dx = x2 - x1, dz = z2 - z1;
-        const len = Math.sqrt(dx * dx + dz * dz);
-        const angle = -Math.atan2(dz, dx);
-        return { cx: (x1 + x2) / 2, cz: (z1 + z2) / 2, len, angle };
-      })
-      .filter(s => s.len > 0.001),
-  [points]);
+  const wallMeshAssembly = useMemo(
+    () =>
+      createExteriorWallMeshAssembly(
+        points.map((point) => ({
+          x: point.x / 100,
+          y: point.y / 100,
+        })),
+        {
+          height: wallH,
+        },
+      ),
+    [points, wallH],
+  );
 
   return (
     <group>
-      {wallSegments.map((seg, i) => (
-        <mesh key={i} position={[seg.cx, wallH / 2, seg.cz]} rotation={[0, seg.angle, 0]}>
-          <boxGeometry args={[seg.len, wallH, WALL_THICKNESS * 1.5]} />
+      {wallMeshAssembly.meshes.map((wallMesh, index) => (
+        <mesh
+          key={`${wallMesh.source}-${index}`}
+          geometry={wallMesh.geometry}
+          position={wallMesh.position}
+          rotation={wallMesh.rotation}
+        >
           <meshStandardMaterial {...EXTERIOR_WALL_SHADING} />
         </mesh>
       ))}
@@ -496,6 +553,10 @@ export default function Viewer25D({
   }),
 }: Props) {
   const sceneCenter = useMemo(() => computeSceneCenter(floors), [floors]);
+  const sceneBounds = useMemo(
+    () => computeSceneBounds(floors, exteriorPolygon),
+    [exteriorPolygon, floors],
+  );
 
   let cumulativeY = 0;
   const floorData = floors.map((floor, i) => {
@@ -504,14 +565,31 @@ export default function Viewer25D({
     return { floor, y, colorIndex: i };
   });
   const totalHeight = floors.reduce((s, f) => s + f.floorHeight, 0);
+  const wallTopHeight = totalHeight * WALL_HEIGHT_SCALE;
+  const orbitTargetY = Math.max(wallTopHeight * 0.32, 0.2);
+  const pedestalWidth = sceneBounds.width + VIEWER_PRESENTATION.pedestalMargin * 2;
+  const pedestalDepth = sceneBounds.depth + VIEWER_PRESENTATION.pedestalMargin * 2;
+  const pedestalY = -VIEWER_PRESENTATION.pedestalHeight / 2 - 0.035;
 
   return (
     <div className="w-full h-full bg-[#F7F6F2]">
       <Canvas
-        camera={{ position: [8, 8, 8], fov: 38 }}
+        camera={{
+          position: [...VIEWER_PRESENTATION.cameraPosition],
+          fov: VIEWER_PRESENTATION.cameraFov,
+        }}
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
+        <color attach="background" args={[VIEWER_PRESENTATION.backgroundColor]} />
+        <fog
+          attach="fog"
+          args={[
+            VIEWER_PRESENTATION.fogColor,
+            VIEWER_PRESENTATION.fogNear,
+            VIEWER_PRESENTATION.fogFar,
+          ]}
+        />
         <AmbientOcclusionComposer />
         <ambientLight
           intensity={AMBIENT_LIGHTING.intensity}
@@ -526,6 +604,23 @@ export default function Viewer25D({
 
         <Suspense fallback={null}>
           <group position={[-sceneCenter.x, 0, -sceneCenter.z]}>
+            <RoundedBox
+              args={[
+                pedestalWidth,
+                VIEWER_PRESENTATION.pedestalHeight,
+                pedestalDepth,
+              ]}
+              position={[0, pedestalY, 0]}
+              radius={VIEWER_PRESENTATION.pedestalCornerRadius}
+              receiveShadow
+              smoothness={5}
+            >
+              <meshStandardMaterial
+                color="#E3DBCF"
+                roughness={0.97}
+                metalness={0.02}
+              />
+            </RoundedBox>
             {exteriorPolygon && exteriorPolygon.length >= 3 && (
               <ExteriorWall points={exteriorPolygon} totalHeight={totalHeight} />
             )}
@@ -551,9 +646,8 @@ export default function Viewer25D({
           enablePan enableZoom enableRotate enableDamping
           dampingFactor={0.08} rotateSpeed={0.5} zoomSpeed={0.6}
           minPolarAngle={FIXED_POLAR} maxPolarAngle={FIXED_POLAR}
-          target={[0, 0, 0]}
+          target={[0, orbitTargetY, 0]}
         />
-        <gridHelper args={[30, 30, "#DEDAD3", "#EEEAE3"]} position={[0, -0.01, 0]} />
         <ScreenshotButton />
       </Canvas>
     </div>
