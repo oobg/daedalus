@@ -68,6 +68,24 @@ export interface RendererSnapshotProject {
   viewState: RendererSnapshotViewState;
 }
 
+export const EDITOR_STATE_PROJECTION_VERSION = 1;
+
+export type RendererConsumer = "renderer" | "viewer";
+
+export interface ReadonlyEditorStateProjection {
+  projectionVersion: typeof EDITOR_STATE_PROJECTION_VERSION;
+  projectedAt: string;
+  consumers: readonly RendererConsumer[];
+  project: RendererSnapshotProject;
+}
+
+export interface SerializedEditorStateProjection {
+  projectionVersion: typeof EDITOR_STATE_PROJECTION_VERSION;
+  projectedAt: string;
+  consumers: RendererConsumer[];
+  project: RendererSnapshotProject;
+}
+
 export interface RenderScenePoint {
   x: number;
   y: number;
@@ -220,5 +238,11 @@ export const RENDERER_CONTRACT_FIELDS = Object.freeze({
     "attachedEdgeId",
     "edgeRelativePosition",
     "anchor",
+  ]),
+  editorStateProjection: Object.freeze([
+    "projectionVersion",
+    "projectedAt",
+    "consumers",
+    "project",
   ]),
 });

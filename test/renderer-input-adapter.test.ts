@@ -255,6 +255,38 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
   });
 });
 
+test("adaptProjectSnapshotToRenderScene stacks floors from each configured floor height", () => {
+  const project: RendererSnapshotProject = {
+    projectId: "project-variable-heights",
+    projectName: "Variable Height Center",
+    objectVersion: 1,
+    floors: [
+      createMinimalSnapshotFloor("floor-low", "Low", 2.25),
+      createMinimalSnapshotFloor("floor-tall", "Tall", 5.5),
+      createMinimalSnapshotFloor("floor-short", "Short", 2.75),
+    ],
+    viewState: {
+      activeFloorId: "floor-low",
+      selectedRoomId: null,
+    },
+  };
+
+  const scene = adaptProjectSnapshotToRenderScene(project);
+
+  assert.deepEqual(
+    scene.floors.map(({ floorId, floorHeight, verticalOffset }) => ({
+      floorId,
+      floorHeight,
+      verticalOffset,
+    })),
+    [
+      { floorId: "floor-low", floorHeight: 2.25, verticalOffset: 0 },
+      { floorId: "floor-tall", floorHeight: 5.5, verticalOffset: 2.25 },
+      { floorId: "floor-short", floorHeight: 2.75, verticalOffset: 7.75 },
+    ],
+  );
+});
+
 test("adaptProjectSnapshotToRenderScene does not retain mutable references to editor snapshot objects", () => {
   const project: RendererSnapshotProject = {
     projectId: "project-beta",
@@ -376,3 +408,33 @@ test("adaptProjectSnapshotToRenderScene returns a deeply frozen scene tree", () 
   assert.ok(Object.isFrozen(scene.floors[0].rooms[0].layers.floor));
   assert.equal(scene.activeFloorId, "floor-1");
 });
+
+function createMinimalSnapshotFloor(
+  floorId: string,
+  floorName: string,
+  floorHeight: number,
+): RendererSnapshotProject["floors"][number] {
+  return {
+    floorId,
+    floorName,
+    floorHeight,
+    referenceImage: null,
+    rooms: [
+      {
+        roomId: `${floorId}-room`,
+        roomName: `${floorName} Room`,
+        roomPolygon: [
+          { x: 0, y: 0 },
+          { x: 4, y: 0 },
+          { x: 4, y: 3 },
+          { x: 0, y: 3 },
+          { x: 0, y: 0 },
+        ],
+        sharedBoundaries: [],
+        area: 12,
+        labelPosition: { x: 2, y: 1.5 },
+      },
+    ],
+    verticalConnectors: [],
+  };
+}

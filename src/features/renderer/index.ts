@@ -1,5 +1,8 @@
 export {
+  EDITOR_STATE_PROJECTION_VERSION,
   RENDERER_CONTRACT_FIELDS,
+  type ReadonlyEditorStateProjection,
+  type RendererConsumer,
   type RendererSnapshotFloor,
   type RendererSnapshotLabelPosition,
   type RendererSnapshotOpening,
@@ -19,6 +22,7 @@ export {
   type RenderSceneRoom,
   type RenderSceneVerticalConnector,
   type RenderSceneWallSegment,
+  type SerializedEditorStateProjection,
 } from "./renderer-contract.ts";
 export {
   createRendererEntrypoint,
@@ -28,3 +32,9 @@ export {
 } from "./renderer-entrypoint.ts";
 export { resolveRenderSceneRoomLayers } from "./render-scene-layering.ts";
 export { adaptProjectSnapshotToRenderScene } from "./renderer-input-adapter.ts";
+export {
+  createReadonlyEditorStateProjection,
+  projectEditorStateForRenderer,
+  serializeEditorStateProjection,
+  type EditorStateProjectionOptions,
+} from "./editor-state-projection.ts";
