@@ -130,14 +130,12 @@ test("importUploadedProject reports clear envelope errors when the upload looks 
 });
 
 test("importUploadedProject reports schema errors from the extracted project payload", () => {
-  const project = createSerializedProject() as ReturnType<
-    typeof createSerializedProject
-  > & {
-    floors: Array<Record<string, unknown>>;
-  };
-  project.floors[0].rooms = [
+  const project = createSerializedProject() as unknown as Record<string, unknown>;
+  const floors = project.floors as Array<Record<string, unknown>>;
+  const rooms = floors[0].rooms as Array<Record<string, unknown>>;
+  floors[0].rooms = [
     {
-      ...project.floors[0].rooms?.[0],
+      ...rooms[0],
       area: "48",
     },
   ];

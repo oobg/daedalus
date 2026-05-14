@@ -79,6 +79,20 @@ export interface Viewer25DPlacementBounds {
   maxY: number;
 }
 
+export interface Viewer25DFloorPlacementInput {
+  floorId: string;
+  floorHeight: number;
+}
+
+export interface Viewer25DFloorPlacement {
+  floorId: string;
+  verticalOffset: number;
+}
+
+export interface Viewer25DFloorRenderPlacement extends Viewer25DFloorPlacement {
+  renderVerticalOffset: number;
+}
+
 export interface Viewer25DFurnitureFootprintClearanceResult {
   placementBounds: Viewer25DPlacementBounds | null;
   adjustedFootprint: Viewer25DPoint2D[] | null;
@@ -140,6 +154,60 @@ export function resolveRoomLayerElevations(
     wallBaseOffset,
     wallLayerHeightDelta: roundCoordinate(wallBaseOffset - floorBaseOffset),
   };
+}
+
+export function resolveViewer25DFloorPlacements(
+  floors: readonly Viewer25DFloorPlacementInput[],
+): Viewer25DFloorPlacement[] {
+  let verticalOffset = 0;
+
+  return floors.map((floor) => {
+    const placement = {
+      floorId: floor.floorId,
+      verticalOffset,
+    };
+    verticalOffset += floor.floorHeight;
+
+    return placement;
+  });
+}
+
+export function resolveViewer25DFloorRenderPlacements(
+  floors: readonly Viewer25DFloorPlacementInput[],
+  heightScale: number,
+): Viewer25DFloorRenderPlacement[] {
+  return resolveViewer25DFloorPlacements(floors).map((placement) => ({
+    ...placement,
+    renderVerticalOffset: roundCoordinate(placement.verticalOffset * heightScale),
+  }));
+}
+
+export function resolveViewer25DFloorExtrusionDepth(
+  floorHeight: number,
+  heightScale: number = DEFAULT_WALL_HEIGHT_SCALE,
+): number {
+  if (!Number.isFinite(floorHeight) || floorHeight <= 0) {
+    throw new Error("Floor extrusion depth must be derived from a positive finite floor height.");
+  }
+
+  if (!Number.isFinite(heightScale) || heightScale <= 0) {
+    throw new Error("Floor extrusion depth scale must be a positive finite number.");
+  }
+
+  return roundCoordinate(floorHeight * heightScale);
+}
+
+export function resolveViewer25DStackExtrusionDepth(
+  floors: readonly Viewer25DFloorPlacementInput[],
+  heightScale: number = DEFAULT_WALL_HEIGHT_SCALE,
+): number {
+  return roundCoordinate(
+    floors.reduce(
+      (totalDepth, floor) =>
+        totalDepth + resolveViewer25DFloorExtrusionDepth(floor.floorHeight, heightScale),
+      0,
+    ),
+  );
 }
 
 export function resolveWallCornerRadius(

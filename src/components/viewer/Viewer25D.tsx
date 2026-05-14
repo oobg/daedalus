@@ -30,6 +30,10 @@ import {
   DEFAULT_WALL_THICKNESS,
   resolveFloorPerimeterInset,
   resolveRoomLayerElevations,
+  resolveViewer25DFloorExtrusionDepth,
+  resolveViewer25DFloorRenderPlacements,
+  resolveViewer25DStackExtrusionDepth,
+  type Viewer25DFloorRenderPlacement,
 } from "./viewer25dGeometry";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
@@ -131,15 +135,15 @@ function computeSceneBounds(
 function createShadowFootprints(
   floors: readonly EditorFloor[],
   exteriorPolygon: readonly EditorPoint[] | null | undefined,
+  floorPlacements: readonly Viewer25DFloorRenderPlacement[],
   floorBaseOffset: number,
   wallBaseOffset: number,
 ) {
   const footprints = [];
-  let cumulativeY = 0;
 
-  for (const floor of floors) {
-    const floorY = cumulativeY;
-    cumulativeY += floor.floorHeight;
+  for (let index = 0; index < floors.length; index += 1) {
+    const floor = floors[index];
+    const floorRenderY = floorPlacements[index]?.renderVerticalOffset ?? 0;
 
     for (const room of floor.rooms) {
       const points = room.roomPolygon.map((point) => ({
@@ -149,12 +153,12 @@ function createShadowFootprints(
       const floorFootprint = createContactShadowFootprint(
         "floor",
         points,
-        floorY + floorBaseOffset,
+        floorRenderY + floorBaseOffset,
       );
       const wallFootprint = createContactShadowFootprint(
         "wall",
         points,
-        floorY + wallBaseOffset,
+        floorRenderY + wallBaseOffset,
       );
 
       if (floorFootprint != null) {
@@ -407,7 +411,7 @@ function OpeningMarker({ opening }: { opening: RoomOpening }) {
 interface RoomMeshProps {
   points:   EditorPoint[];
   openings: RoomOpening[];
-  floorY:   number;
+  floorRenderY: number;
   height:   number;
   floorBaseOffset: number;
   wallBaseOffset: number;
@@ -419,7 +423,7 @@ interface RoomMeshProps {
 function RoomMesh({
   points,
   openings,
-  floorY,
+  floorRenderY,
   height,
   floorBaseOffset,
   wallBaseOffset,
@@ -440,7 +444,7 @@ function RoomMesh({
     () => polygonToShape(surfaceLayout.floorSurfaceFootprint),
     [surfaceLayout],
   );
-  const wallH = height * WALL_HEIGHT_SCALE;
+  const wallH = resolveViewer25DFloorExtrusionDepth(height, WALL_HEIGHT_SCALE);
 
   const wallMeshAssembly = useMemo(
     () =>
@@ -464,7 +468,7 @@ function RoomMesh({
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
 
   return (
-    <group position={[0, floorY * WALL_HEIGHT_SCALE, 0]}>
+    <group position={[0, floorRenderY, 0]}>
       {/* Wall assembly — softened segments and corners, no ceiling */}
       {wallMeshAssembly.meshes.map((wallMesh, index) => (
         <mesh
@@ -631,7 +635,7 @@ interface ExteriorWallProps {
 }
 
 function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
-  const wallH = totalHeight * WALL_HEIGHT_SCALE;
+  const wallH = resolveViewer25DFloorExtrusionDepth(totalHeight, WALL_HEIGHT_SCALE);
   const wallMeshAssembly = useMemo(
     () =>
       createExteriorWallMeshAssembly(
@@ -687,25 +691,28 @@ export default function Viewer25D({
     () => computeSceneBounds(floors, exteriorPolygon),
     [exteriorPolygon, floors],
   );
+  const floorPlacements = useMemo(
+    () => resolveViewer25DFloorRenderPlacements(floors, WALL_HEIGHT_SCALE),
+    [floors],
+  );
   const shadowFootprints = useMemo(
     () =>
       createShadowFootprints(
         floors,
         exteriorPolygon,
+        floorPlacements,
         floorBaseOffset,
         wallBaseOffset,
       ),
-    [exteriorPolygon, floorBaseOffset, floors, wallBaseOffset],
+    [exteriorPolygon, floorBaseOffset, floorPlacements, floors, wallBaseOffset],
   );
-
-  let cumulativeY = 0;
-  const floorData = floors.map((floor, i) => {
-    const y = cumulativeY;
-    cumulativeY += floor.floorHeight;
-    return { floor, y, colorIndex: i };
-  });
+  const floorData = floors.map((floor, i) => ({
+    floor,
+    y: floorPlacements[i]?.renderVerticalOffset ?? 0,
+    colorIndex: i,
+  }));
   const totalHeight = floors.reduce((s, f) => s + f.floorHeight, 0);
-  const wallTopHeight = totalHeight * WALL_HEIGHT_SCALE;
+  const wallTopHeight = resolveViewer25DStackExtrusionDepth(floors, WALL_HEIGHT_SCALE);
   const orbitTargetY = Math.max(wallTopHeight * 0.32, 0.2);
   const pedestalWidth = sceneBounds.width + VIEWER_PRESENTATION.pedestalMargin * 2;
   const pedestalDepth = sceneBounds.depth + VIEWER_PRESENTATION.pedestalMargin * 2;
@@ -785,7 +792,7 @@ export default function Viewer25D({
                   key={room.roomId}
                   points={room.roomPolygon}
                   openings={room.openings ?? []}
-                  floorY={y}
+                  floorRenderY={y}
                   height={floor.floorHeight}
                   floorBaseOffset={floorBaseOffset}
                   wallBaseOffset={wallBaseOffset}

@@ -16,6 +16,10 @@ import {
   resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
   resolveRoomLayerElevations,
+  resolveViewer25DFloorExtrusionDepth,
+  resolveViewer25DFloorRenderPlacements,
+  resolveViewer25DFloorPlacements,
+  resolveViewer25DStackExtrusionDepth,
   validateWallTopology,
   resolveWallBaseElevationOffset,
   resolveWallCornerRadius,
@@ -73,6 +77,66 @@ test("resolveRoomLayerElevations keeps wall and floor layer heights distinct for
     elevations.wallLayerHeightDelta,
     elevations.wallBaseOffset - elevations.floorBaseOffset,
   );
+});
+
+test("resolveViewer25DFloorPlacements positions each floor from prior configured floor heights", () => {
+  const placements = resolveViewer25DFloorPlacements([
+    { floorId: "floor-ground", floorHeight: 2.75 },
+    { floorId: "floor-mezzanine", floorHeight: 4.2 },
+    { floorId: "floor-roof", floorHeight: 3.1 },
+  ]);
+
+  assert.deepEqual(placements, [
+    { floorId: "floor-ground", verticalOffset: 0 },
+    { floorId: "floor-mezzanine", verticalOffset: 2.75 },
+    { floorId: "floor-roof", verticalOffset: 6.95 },
+  ]);
+});
+
+test("resolveViewer25DFloorRenderPlacements converts configured floor heights into render-space floor positions", () => {
+  const placements = resolveViewer25DFloorRenderPlacements(
+    [
+      { floorId: "floor-ground", floorHeight: 2.5 },
+      { floorId: "floor-gallery", floorHeight: 3.75 },
+      { floorId: "floor-roof", floorHeight: 4.25 },
+    ],
+    0.3,
+  );
+
+  assert.deepEqual(placements, [
+    { floorId: "floor-ground", verticalOffset: 0, renderVerticalOffset: 0 },
+    { floorId: "floor-gallery", verticalOffset: 2.5, renderVerticalOffset: 0.75 },
+    { floorId: "floor-roof", verticalOffset: 6.25, renderVerticalOffset: 1.875 },
+  ]);
+});
+
+test("resolveViewer25DFloorExtrusionDepth derives render depth from configured floor height", () => {
+  assert.equal(resolveViewer25DFloorExtrusionDepth(4.2, 0.3), 1.26);
+  assert.equal(resolveViewer25DFloorExtrusionDepth(2.75, 0.4), 1.1);
+});
+
+test("resolveViewer25DFloorExtrusionDepth rejects hardcoded/default fallback inputs", () => {
+  assert.throws(
+    () => resolveViewer25DFloorExtrusionDepth(0, 0.3),
+    /positive finite floor height/,
+  );
+  assert.throws(
+    () => resolveViewer25DFloorExtrusionDepth(3, 0),
+    /positive finite number/,
+  );
+});
+
+test("resolveViewer25DStackExtrusionDepth sums per-floor configured extrusion depths", () => {
+  const depth = resolveViewer25DStackExtrusionDepth(
+    [
+      { floorId: "floor-ground", floorHeight: 2.5 },
+      { floorId: "floor-gallery", floorHeight: 3.75 },
+      { floorId: "floor-roof", floorHeight: 4.25 },
+    ],
+    0.3,
+  );
+
+  assert.equal(depth, 3.15);
 });
 
 test("resolveFloorPerimeterInset computes a measurable floor setback from wall boundaries", () => {

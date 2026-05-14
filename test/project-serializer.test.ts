@@ -7,6 +7,7 @@ import {
   type EditorProjectState,
   type SerializedProjectData,
 } from "../src/features/project-export/project-serializer.ts";
+import { DEFAULT_FLOOR_HEIGHT } from "../src/domain/floor.ts";
 
 test("serializeProjectForExport emits JSON-safe floor-by-floor building guide data", () => {
   const project: EditorProjectState = {
@@ -444,6 +445,22 @@ test("restoreProjectFromImport hydrates imported floors in source order with int
     restored.floors.map((floor) => floor.id),
     ["floor-2", "floor-1"],
   );
+  assert.deepEqual(
+    restored.floors.map((floor) => ({
+      id: floor.id,
+      height: floor.height,
+    })),
+    [
+      {
+        id: "floor-2",
+        height: 4.2,
+      },
+      {
+        id: "floor-1",
+        height: 3.8,
+      },
+    ],
+  );
   assert.deepEqual(restored.floors[1].rooms[0].roomPolygon, [
     { x: 0, y: 0 },
     { x: 7, y: 0 },
@@ -453,6 +470,43 @@ test("restoreProjectFromImport hydrates imported floors in source order with int
   ]);
   assert.equal(restored.floors[1].rooms[0].roomName, "Lobby");
   assert.equal(restored.floors[1].rooms[0].openings[0]?.attachedEdgeId, "edge-lobby-east");
+});
+
+test("restoreProjectFromImport applies the default height when loaded floor data omits it", () => {
+  const importedProject = {
+    projectId: "project-imported",
+    projectName: "Imported Guide",
+    objectVersion: 2,
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "Ground Floor",
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      uploadedProjectName: null,
+    },
+    assets: [],
+    annotations: [],
+    editorConfig: {
+      selectedTool: "select",
+      snapToGrid: true,
+      gridSize: 32,
+      showGrid: true,
+      showReferenceImages: true,
+      showRoomLabels: true,
+    },
+  } as unknown as SerializedProjectData;
+
+  const restored = restoreProjectFromImport(importedProject);
+
+  assert.equal(restored.floors[0].height, DEFAULT_FLOOR_HEIGHT);
 });
 
 test("restoreProjectFromImport clones imported floor and room geometry into mutable editor state", () => {
@@ -613,4 +667,88 @@ test("serializeProjectForExport produces a plain JSON payload that round-trips c
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(serialized)), serialized);
+});
+
+test("serializeProjectForExport and restoreProjectFromImport preserve each configured floor height", () => {
+  const serialized = serializeProjectForExport({
+    projectId: "project-height-roundtrip",
+    projectName: "Height Roundtrip",
+    objectVersion: 2,
+    floors: [
+      {
+        id: "floor-ground",
+        name: "Ground",
+        height: 3.25,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        id: "floor-second",
+        name: "Second",
+        height: 4.5,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        id: "floor-mechanical",
+        name: "Mechanical",
+        height: 2.75,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-second",
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      uploadedProjectName: null,
+    },
+  });
+
+  const uploadedJson = JSON.stringify(serialized);
+  const restored = restoreProjectFromImport(JSON.parse(uploadedJson));
+
+  assert.deepEqual(
+    serialized.floors.map(({ floorId, floorHeight }) => ({
+      floorId,
+      floorHeight,
+    })),
+    [
+      {
+        floorId: "floor-ground",
+        floorHeight: 3.25,
+      },
+      {
+        floorId: "floor-second",
+        floorHeight: 4.5,
+      },
+      {
+        floorId: "floor-mechanical",
+        floorHeight: 2.75,
+      },
+    ],
+  );
+  assert.deepEqual(
+    restored.floors.map(({ id, height }) => ({
+      id,
+      height,
+    })),
+    [
+      {
+        id: "floor-ground",
+        height: 3.25,
+      },
+      {
+        id: "floor-second",
+        height: 4.5,
+      },
+      {
+        id: "floor-mechanical",
+        height: 2.75,
+      },
+    ],
+  );
 });

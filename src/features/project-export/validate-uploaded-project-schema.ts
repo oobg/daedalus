@@ -1,6 +1,7 @@
 import type {
   SerializedProjectData,
 } from "./project-serializer.ts";
+import { DEFAULT_FLOOR_HEIGHT } from "../../domain/floor.ts";
 
 export type ProjectSchemaValidationErrorCode =
   | "missing_field"
@@ -28,6 +29,7 @@ type ValidationContext = {
 };
 
 type Validator = (value: unknown, path: string, context: ValidationContext) => void;
+type OptionalValidator = Validator & { optional: true };
 
 const ASSET_TYPES = new Set([
   "reference-image",
@@ -57,7 +59,9 @@ export function validateUploadedProjectSchema(
 
   return {
     ok: true,
-    value: value as unknown as SerializedProjectData,
+    value: normalizeUploadedProjectSchemaDefaults(
+      value,
+    ) as unknown as SerializedProjectData,
   };
 }
 
@@ -98,7 +102,7 @@ function validateFloor(
     {
       floorId: validateString,
       floorName: validateString,
-      floorHeight: validateNumber,
+      floorHeight: optional(validatePositiveNumber),
       referenceImage: validateNullableString,
       rooms: (member, memberPath, memberContext) =>
         validateArray(member, memberPath, memberContext, validateRoom),
@@ -223,7 +227,7 @@ function validateViewState(
       activeFloorId: validateString,
       zoom: validateNumber,
       pan: validatePoint,
-      uploadedProjectName: validateOptionalNullableString,
+      uploadedProjectName: optional(validateNullableString),
     },
   );
 }
@@ -326,6 +330,10 @@ function validateObject(
 
   for (const key of Object.keys(schema)) {
     if (!(key in entries)) {
+      if (isOptionalValidator(schema[key])) {
+        continue;
+      }
+
       context.errors.push({
         code: "missing_field",
         path: `${path}.${key}`,
@@ -386,18 +394,6 @@ function validateNullableString(
   }
 }
 
-function validateOptionalNullableString(
-  value: unknown,
-  path: string,
-  context: ValidationContext,
-): void {
-  if (value === undefined) {
-    return;
-  }
-
-  validateNullableString(value, path, context);
-}
-
 function validateNumber(
   value: unknown,
   path: string,
@@ -405,6 +401,16 @@ function validateNumber(
 ): void {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     pushInvalidFieldError(context, path, "finite number", value);
+  }
+}
+
+function validatePositiveNumber(
+  value: unknown,
+  path: string,
+  context: ValidationContext,
+): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    pushInvalidFieldError(context, path, "positive finite number", value);
   }
 }
 
@@ -432,6 +438,45 @@ function validateStringEnum(
       message: `Expected one of ${expected}, received ${describeValue(value)}.`,
     });
   }
+}
+
+function optional(validator: Validator): OptionalValidator {
+  const wrappedValidator: OptionalValidator = Object.assign(
+    (value: unknown, path: string, context: ValidationContext) => {
+      validator(value, path, context);
+    },
+    { optional: true as const },
+  );
+
+  return wrappedValidator;
+}
+
+function isOptionalValidator(validator: Validator): validator is OptionalValidator {
+  return "optional" in validator && validator.optional === true;
+}
+
+function normalizeUploadedProjectSchemaDefaults(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  const floors = value.floors;
+
+  if (!Array.isArray(floors)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    floors: floors.map((floor) => {
+      if (!isPlainObject(floor) || "floorHeight" in floor) {
+        return floor;
+      }
+
+      return {
+        ...floor,
+        floorHeight: DEFAULT_FLOOR_HEIGHT,
+      };
+    }),
+  };
 }
 
 function pushInvalidFieldError(

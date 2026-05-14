@@ -7,6 +7,7 @@ import {
 import {
   type SerializedProjectData,
 } from "../src/features/project-export/project-serializer.ts";
+import { DEFAULT_FLOOR_HEIGHT } from "../src/domain/floor.ts";
 
 function createValidProject(): SerializedProjectData {
   return {
@@ -108,8 +109,12 @@ function createValidProject(): SerializedProjectData {
   };
 }
 
+function createValidProjectRecord(): Record<string, unknown> {
+  return createValidProject() as unknown as Record<string, unknown>;
+}
+
 test("validateUploadedProjectSchema accepts a fully valid serialized project", () => {
-  const project = createValidProject();
+  const project = createValidProjectRecord();
 
   const result = validateUploadedProjectSchema(project);
 
@@ -119,8 +124,24 @@ test("validateUploadedProjectSchema accepts a fully valid serialized project", (
   });
 });
 
+test("validateUploadedProjectSchema defaults omitted floor heights on loaded floor data", () => {
+  const project = createValidProjectRecord();
+  const floors = project.floors as Array<Record<string, unknown>>;
+  delete floors[0].floorHeight;
+
+  const result = validateUploadedProjectSchema(project);
+
+  assert.equal(result.ok, true);
+
+  if (!result.ok) {
+    return;
+  }
+
+  assert.equal(result.value.floors[0].floorHeight, DEFAULT_FLOOR_HEIGHT);
+});
+
 test("validateUploadedProjectSchema reports missing required top-level fields", () => {
-  const project = createValidProject() as Record<string, unknown>;
+  const project = createValidProjectRecord();
   delete project.projectName;
 
   const result = validateUploadedProjectSchema(project);
@@ -141,19 +162,17 @@ test("validateUploadedProjectSchema reports missing required top-level fields", 
 });
 
 test("validateUploadedProjectSchema reports invalid nested field types with precise paths", () => {
-  const project = createValidProject() as SerializedProjectData & {
-    floors: Array<Record<string, unknown>>;
-  };
-  project.floors[0].rooms = [
+  const project = createValidProjectRecord();
+  const floors = project.floors as Array<Record<string, unknown>>;
+  const rooms = floors[0].rooms as Array<Record<string, unknown>>;
+  floors[0].rooms = [
     {
-      ...project.floors[0].rooms?.[0],
+      ...rooms[0],
       area: "48",
     },
   ];
 
-  const result = validateUploadedProjectSchema(
-    project as unknown as Record<string, unknown>,
-  );
+  const result = validateUploadedProjectSchema(project);
 
   assert.equal(result.ok, false);
 
@@ -170,15 +189,56 @@ test("validateUploadedProjectSchema reports invalid nested field types with prec
   ]);
 });
 
-test("validateUploadedProjectSchema reports unexpected fields at nested object paths", () => {
-  const project = createValidProject() as SerializedProjectData & {
-    viewState: Record<string, unknown>;
-  };
-  project.viewState.viewportMode = "iso";
+test("validateUploadedProjectSchema rejects non-positive floor heights", () => {
+  const project = createValidProjectRecord();
+  const floors = project.floors as Array<Record<string, unknown>>;
+  floors[0].floorHeight = 0;
 
-  const result = validateUploadedProjectSchema(
-    project as unknown as Record<string, unknown>,
-  );
+  const result = validateUploadedProjectSchema(project);
+
+  assert.equal(result.ok, false);
+
+  if (result.ok) {
+    return;
+  }
+
+  assert.deepEqual(result.errors, [
+    {
+      code: "invalid_field",
+      path: "project.floors[0].floorHeight",
+      message: "Expected positive finite number, received number.",
+    },
+  ]);
+});
+
+test("validateUploadedProjectSchema rejects non-numeric floor heights", () => {
+  const project = createValidProjectRecord();
+  const floors = project.floors as Array<Record<string, unknown>>;
+  floors[0].floorHeight = "3.5";
+
+  const result = validateUploadedProjectSchema(project);
+
+  assert.equal(result.ok, false);
+
+  if (result.ok) {
+    return;
+  }
+
+  assert.deepEqual(result.errors, [
+    {
+      code: "invalid_field",
+      path: "project.floors[0].floorHeight",
+      message: "Expected positive finite number, received string.",
+    },
+  ]);
+});
+
+test("validateUploadedProjectSchema reports unexpected fields at nested object paths", () => {
+  const project = createValidProjectRecord();
+  const viewState = project.viewState as Record<string, unknown>;
+  viewState.viewportMode = "iso";
+
+  const result = validateUploadedProjectSchema(project);
 
   assert.equal(result.ok, false);
 
@@ -196,14 +256,11 @@ test("validateUploadedProjectSchema reports unexpected fields at nested object p
 });
 
 test("validateUploadedProjectSchema reports invalid enum values", () => {
-  const project = createValidProject() as SerializedProjectData & {
-    editorConfig: Record<string, unknown>;
-  };
-  project.editorConfig.selectedTool = "paint";
+  const project = createValidProjectRecord();
+  const editorConfig = project.editorConfig as Record<string, unknown>;
+  editorConfig.selectedTool = "paint";
 
-  const result = validateUploadedProjectSchema(
-    project as unknown as Record<string, unknown>,
-  );
+  const result = validateUploadedProjectSchema(project);
 
   assert.equal(result.ok, false);
 

@@ -387,3 +387,32 @@ test("assembleProjectExportPayload stays stable across repeated calls and detach
   assert.equal(firstAssembly.project.assets[0].fileName, "level-1.png");
   assert.deepEqual(JSON.parse(JSON.stringify(firstAssembly)), firstAssembly);
 });
+
+test("assembleProjectExportPayload includes every configured floor height in generated output", () => {
+  const project = createProjectFixture();
+
+  project.floors[0].height = 4.25;
+  project.floors[1].height = 5.75;
+
+  const assembled = assembleProjectExportPayload(
+    project,
+    new Date("2026-05-13T11:45:00.000Z"),
+  );
+
+  assert.deepEqual(
+    assembled.project.floors.map((floor) => ({
+      floorId: floor.floorId,
+      floorHeight: floor.floorHeight,
+    })),
+    [
+      {
+        floorId: "floor-1",
+        floorHeight: 4.25,
+      },
+      {
+        floorId: "floor-2",
+        floorHeight: 5.75,
+      },
+    ],
+  );
+});

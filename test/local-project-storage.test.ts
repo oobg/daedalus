@@ -124,6 +124,132 @@ test("saveProjectToLocalStorage overwrites an existing saved project for the sam
   assert.deepEqual(loaded?.project.floors, updatedProject.floors);
 });
 
+test("saveProjectToLocalStorage preserves each floor reference image association", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const project: TestProject = {
+    projectId: "project-multifloor",
+    objectVersion: 1,
+    projectName: "Multifloor Guide",
+    floors: [
+      {
+        id: "floor-1",
+        name: "Ground Floor",
+        height: 3,
+        referenceImage: "floor-plan://project-multifloor/floor-1/ground.png",
+      },
+      {
+        id: "floor-2",
+        name: "Second Floor",
+        height: 3,
+        referenceImage: "floor-plan://project-multifloor/floor-2/second.png",
+      },
+      {
+        id: "floor-3",
+        name: "Third Floor",
+        height: 3,
+        referenceImage: null,
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-2",
+      zoom: 1,
+    },
+  };
+
+  saveProjectToLocalStorage(project, storage);
+
+  const loaded = loadProjectFromLocalStorage<TestProject>(
+    project.projectId,
+    storage,
+  );
+
+  assert.deepEqual(
+    loaded?.project.floors.map(({ id, referenceImage }) => ({
+      id,
+      referenceImage,
+    })),
+    [
+      {
+        id: "floor-1",
+        referenceImage: "floor-plan://project-multifloor/floor-1/ground.png",
+      },
+      {
+        id: "floor-2",
+        referenceImage: "floor-plan://project-multifloor/floor-2/second.png",
+      },
+      {
+        id: "floor-3",
+        referenceImage: null,
+      },
+    ],
+  );
+});
+
+test("saveProjectToLocalStorage preserves each configured editor floor height", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const project = {
+    projectId: "project-floor-heights",
+    objectVersion: 1,
+    projectName: "Floor Height Guide",
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "Ground Floor",
+        floorHeight: 3.25,
+        referenceImage: null,
+        rooms: [],
+      },
+      {
+        floorId: "floor-2",
+        floorName: "Second Floor",
+        floorHeight: 4.5,
+        referenceImage: null,
+        rooms: [],
+      },
+      {
+        floorId: "floor-3",
+        floorName: "Mechanical",
+        floorHeight: 2.75,
+        referenceImage: null,
+        rooms: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-2",
+      selectedRoomId: null,
+    },
+    exteriorPolygon: null,
+  };
+
+  saveProjectToLocalStorage(project, storage);
+
+  const loaded = loadProjectFromLocalStorage<typeof project>(
+    project.projectId,
+    storage,
+  );
+
+  assert.deepEqual(
+    loaded?.project.floors.map(({ floorId, floorHeight }) => ({
+      floorId,
+      floorHeight,
+    })),
+    [
+      {
+        floorId: "floor-1",
+        floorHeight: 3.25,
+      },
+      {
+        floorId: "floor-2",
+        floorHeight: 4.5,
+      },
+      {
+        floorId: "floor-3",
+        floorHeight: 2.75,
+      },
+    ],
+  );
+});
+
 test("loadProjectFromLocalStorage returns null when no saved project exists", () => {
   const storage = new InMemoryLocalProjectStorage();
 
