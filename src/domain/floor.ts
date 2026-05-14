@@ -53,10 +53,13 @@ export interface AssignFloorReferenceImageInput {
 export const MIN_FLOOR_HEIGHT = 0;
 
 export function normalizeFloor(input: FloorInput): Floor {
+  const height = input.height ?? DEFAULT_FLOOR_HEIGHT;
+  assertValidFloorHeight(height);
+
   return {
     id: input.id,
     name: input.name,
-    height: input.height ?? DEFAULT_FLOOR_HEIGHT,
+    height,
     referenceImage: input.referenceImage ?? null,
   };
 }
@@ -88,6 +91,14 @@ export function parseFloorHeightInput(
   }
 
   return value;
+}
+
+function assertValidFloorHeight(height: number): void {
+  const parsedHeight = parseFloorHeightInput(height);
+
+  if (typeof parsedHeight !== "number") {
+    throw new Error(parsedHeight.message);
+  }
 }
 
 export function getFloorVerticalOffset(

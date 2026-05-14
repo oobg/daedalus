@@ -1,11 +1,20 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Image, Upload, Download, Save, FolderOpen, FileJson } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  ACCEPTED_FLOOR_PLAN_IMAGE_TYPES,
+  validateFloorPlanImageFile,
+} from "@/features/floor-plan-upload/validate-floor-plan-image-file";
+import { saveAcceptedFloorPlanImage } from "@/features/floor-plan-upload/floor-plan-image-storage";
+import {
+  formatFloorHeightEditorValue,
+  parseFloorHeightEditorValue,
+} from "@/features/editor/model/floorHeightEditing";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -22,7 +31,8 @@ export default function FloorSidebar() {
   const removeFloor       = useEditorStore(s => s.removeFloor);
   const setActiveFloor    = useEditorStore(s => s.setActiveFloor);
   const updateFloor       = useEditorStore(s => s.updateFloor);
-  const setReferenceImage = useEditorStore(s => s.setReferenceImage);
+  const setFloorReferenceImage = useEditorStore(s => s.setFloorReferenceImage);
+  const setActiveFloorReferenceImage = useEditorStore(s => s.setActiveFloorReferenceImage);
   const saveToLocalStorage    = useEditorStore(s => s.saveToLocalStorage);
   const loadFromLocalStorage  = useEditorStore(s => s.loadFromLocalStorage);
   const exportJSON        = useEditorStore(s => s.exportJSON);
@@ -31,6 +41,8 @@ export default function FloorSidebar() {
 
   const importFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef  = useRef<HTMLInputElement>(null);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [floorHeightInput, setFloorHeightInput] = useState("");
 
   function handleImportJSON(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -55,16 +67,63 @@ export default function FloorSidebar() {
     URL.revokeObjectURL(url);
   }
 
-  function handleReferenceImage(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleReferenceImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !activeFloorId) return;
-    const reader = new FileReader();
-    reader.onload = ev => setReferenceImage(activeFloorId, ev.target?.result as string);
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    const validation = validateFloorPlanImageFile(file);
+
+    if (!validation.ok) {
+      setImageUploadError(validation.message);
+      e.target.value = "";
+      return;
+    }
+
+    const targetFloorId = activeFloorId;
+    if (!targetFloorId) return;
+
+    try {
+      const asset = await saveAcceptedFloorPlanImage(
+        {
+          projectId: useEditorStore.getState().project.projectId,
+          floorId: targetFloorId,
+          file: validation.file,
+        },
+        window.localStorage,
+      );
+
+      setFloorReferenceImage(targetFloorId, asset.assetRef);
+      setImageUploadError(null);
+    } catch {
+      setImageUploadError("Failed to store the selected floor plan image.");
+    } finally {
+      e.target.value = "";
+    }
   }
 
   const activeFloor = floors.find(f => f.floorId === activeFloorId);
+  const acceptedFloorPlanImageTypes = ACCEPTED_FLOOR_PLAN_IMAGE_TYPES.join(",");
+
+  useEffect(() => {
+    setFloorHeightInput(
+      activeFloor ? formatFloorHeightEditorValue(activeFloor.floorHeight) : "",
+    );
+  }, [activeFloor?.floorHeight, activeFloor?.floorId]);
+
+  function handleFloorHeightChange(value: string) {
+    setFloorHeightInput(value);
+
+    if (!activeFloor) return;
+
+    const floorHeight = parseFloorHeightEditorValue(value);
+    if (floorHeight === null) return;
+
+    updateFloor(activeFloor.floorId, { floorHeight });
+  }
+
+  function handleFloorHeightBlur() {
+    if (!activeFloor) return;
+
+    setFloorHeightInput(formatFloorHeightEditorValue(activeFloor.floorHeight));
+  }
 
   return (
     <aside className="w-48 flex flex-col bg-surface-0 border-r border-border-default shrink-0">
@@ -126,10 +185,9 @@ export default function FloorSidebar() {
               type="number"
               min={0.5}
               step={0.5}
-              value={activeFloor.floorHeight}
-              onChange={e =>
-                updateFloor(activeFloor.floorId, { floorHeight: parseFloat(e.target.value) || 3 })
-              }
+              value={floorHeightInput}
+              onChange={e => handleFloorHeightChange(e.target.value)}
+              onBlur={handleFloorHeightBlur}
             />
           </div>
 
@@ -143,12 +201,22 @@ export default function FloorSidebar() {
             {activeFloor.referenceImage ? "도면 이미지 변경" : "도면 이미지 업로드"}
           </Button>
 
+          <p className="text-[10px] leading-4 text-text-muted">
+            PNG, JPEG, WebP
+          </p>
+
+          {imageUploadError && (
+            <p role="alert" className="text-[11px] leading-4 text-red-600">
+              {imageUploadError}
+            </p>
+          )}
+
           {activeFloor.referenceImage && (
             <Button
               variant="danger"
               size="xs"
               className="w-full justify-start gap-1.5"
-              onClick={() => setReferenceImage(activeFloor.floorId, null)}
+              onClick={() => setActiveFloorReferenceImage(null)}
             >
               <Trash2 size={10} strokeWidth={1.8} />
               도면 이미지 제거
@@ -197,8 +265,14 @@ export default function FloorSidebar() {
         ))}
       </div>
 
-      <input ref={importFileRef} type="file" accept=".json"   className="hidden" onChange={handleImportJSON} />
-      <input ref={imageFileRef}  type="file" accept="image/*" className="hidden" onChange={handleReferenceImage} />
+      <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
+      <input
+        ref={imageFileRef}
+        type="file"
+        accept={acceptedFloorPlanImageTypes}
+        className="hidden"
+        onChange={handleReferenceImage}
+      />
     </aside>
   );
 }

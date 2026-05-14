@@ -48,6 +48,22 @@ test("normalizeFloor preserves an explicit height", () => {
   );
 });
 
+test("normalizeFloor rejects non-positive or non-finite heights", () => {
+  const invalidHeights = [0, -1, Number.NaN, Number.POSITIVE_INFINITY];
+
+  for (const height of invalidHeights) {
+    assert.throws(
+      () =>
+        normalizeFloor({
+          id: `floor-${String(height)}`,
+          name: "Invalid Floor",
+          height,
+        }),
+      /Floor height must be a number greater than 0\./,
+    );
+  }
+});
+
 test("deserializeFloor then serializeFloor preserves height without loss", () => {
   const serializedFloor = {
     id: "floor-4",
