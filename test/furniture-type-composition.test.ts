@@ -17,9 +17,9 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
       partIds: ["base", "mattress", "headboard"],
       primitives: ["rounded-box", "rounded-box", "rounded-box"],
       geometryArgs: [
-        [2.1, 0.26, 1.6, 3, 0.08],
-        [2.0, 0.18, 1.52, 4, 0.09],
-        [1.72, 0.56, 0.12, 2, 0.06],
+        [2.1, 0.2392, 1.6, 3, 0.0736],
+        [1.96, 0.2088, 1.4896, 4, 0.0882],
+        [1.6512, 0.6272, 0.1296, 2, 0.0576],
       ],
     },
     chair: {
@@ -28,9 +28,9 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
       partIds: ["seat", "backrest", "pedestal"],
       primitives: ["rounded-box", "rounded-box", "cylinder"],
       geometryArgs: [
-        [0.5, 0.08, 0.5, 2, 0.04],
-        [0.46, 0.34, 0.08, 2, 0.04],
-        [0.06, 0.06, 0.38, 6],
+        [0.52, 0.0976, 0.52, 2, 0.0416],
+        [0.4416, 0.3808, 0.0736, 2, 0.0368],
+        [0.0492, 0.0492, 0.4028, 6],
       ],
     },
     desk: {
@@ -39,9 +39,9 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
       partIds: ["top", "drawer-block", "leg-frame"],
       primitives: ["rounded-box", "rounded-box", "box"],
       geometryArgs: [
-        [1.4, 0.08, 0.68, 2, 0.04],
-        [0.42, 0.5, 0.58, 2, 0.03],
-        [0.08, 0.68, 0.58],
+        [1.428, 0.0944, 0.6936, 2, 0.0408],
+        [0.441, 0.49, 0.5916, 2, 0.0294],
+        [0.0704, 0.6936, 0.5452],
       ],
     },
     sofa: {
@@ -56,11 +56,11 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
         "rounded-box",
       ],
       geometryArgs: [
-        [2.2, 0.2, 0.96, 3, 0.08],
-        [1.96, 0.18, 0.6, 3, 0.08],
-        [1.96, 0.52, 0.22, 3, 0.08],
-        [0.14, 0.58, 0.86, 2, 0.06],
-        [0.14, 0.58, 0.86, 2, 0.06],
+        [2.2, 0.216, 0.9792, 3, 0.08],
+        [1.9208, 0.2124, 0.636, 3, 0.0784],
+        [1.9208, 0.5616, 0.2112, 3, 0.0768],
+        [0.1512, 0.6148, 0.8428, 2, 0.0588],
+        [0.1512, 0.6148, 0.8428, 2, 0.0588],
       ],
     },
     storage: {
@@ -69,9 +69,9 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
       partIds: ["plinth", "body", "top"],
       primitives: ["rounded-box", "rounded-box", "rounded-box"],
       geometryArgs: [
-        [1.08, 0.08, 0.36, 2, 0.02],
-        [1.18, 1.24, 0.46, 2, 0.025],
-        [1.18, 0.08, 0.46, 2, 0.025],
+        [1.0368, 0.0704, 0.324, 2, 0.0176],
+        [1.2036, 1.2772, 0.4508, 2, 0.0245],
+        [1.2036, 0.088, 0.4508, 2, 0.0245],
       ],
     },
     table: {
@@ -80,9 +80,9 @@ test("createFurnitureTypeComposition maps every supported furniture type to a fr
       partIds: ["top", "column", "base"],
       primitives: ["rounded-box", "cylinder", "cylinder"],
       geometryArgs: [
-        [1.2, 0.07, 1.2, 2, 0.035],
-        [0.09, 0.09, 0.58, 6],
-        [0.29, 0.29, 0.08, 12],
+        [1.236, 0.0798, 1.236, 2, 0.03605],
+        [0.0792, 0.0792, 0.6032, 6],
+        [0.261, 0.261, 0.0864, 12],
       ],
     },
   } as const;

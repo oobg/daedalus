@@ -735,6 +735,12 @@ export default function Viewer25D({
           intensity={VIEWER_LIGHTING.ambientLight.intensity}
           color={VIEWER_LIGHTING.ambientLight.color}
         />
+        <hemisphereLight
+          position={VIEWER_LIGHTING.bounceLight.position}
+          intensity={VIEWER_LIGHTING.bounceLight.intensity}
+          color={VIEWER_LIGHTING.bounceLight.skyColor}
+          groundColor={VIEWER_LIGHTING.bounceLight.groundColor}
+        />
         <directionalLight
           position={VIEWER_LIGHTING.diffuseLight.position}
           intensity={VIEWER_LIGHTING.diffuseLight.intensity}

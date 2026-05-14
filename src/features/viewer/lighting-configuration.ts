@@ -20,8 +20,18 @@ export interface DirectionalViewerLightConfiguration {
   shadowBias: number;
 }
 
+export interface HemisphereViewerLightConfiguration {
+  type: "hemisphere";
+  skyColor: string;
+  groundColor: string;
+  intensity: number;
+  colorTemperatureKelvin: number;
+  position: readonly [number, number, number];
+}
+
 export interface ViewerLightingConfiguration {
   ambientLight: Readonly<AmbientViewerLightConfiguration>;
+  bounceLight: Readonly<HemisphereViewerLightConfiguration>;
   diffuseLight: Readonly<DirectionalViewerLightConfiguration>;
 }
 
@@ -31,6 +41,14 @@ const MINIATURE_ARCHITECTURE_LIGHTING_CONFIGURATION = Object.freeze<ViewerLighti
     color: "#FFF8F0",
     intensity: 0.85,
     colorTemperatureKelvin: 4300,
+  }),
+  bounceLight: Object.freeze<HemisphereViewerLightConfiguration>({
+    type: "hemisphere",
+    skyColor: "#F6E6D6",
+    groundColor: "#C9AE8F",
+    intensity: 0.28,
+    colorTemperatureKelvin: 3600,
+    position: [0, 5.5, 0],
   }),
   diffuseLight: Object.freeze<DirectionalViewerLightConfiguration>({
     type: "directional",

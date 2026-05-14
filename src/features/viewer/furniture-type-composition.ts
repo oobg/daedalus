@@ -12,11 +12,17 @@ import {
   type BuiltFurniturePrimitive,
   type FurniturePrimitiveBuildLimits,
 } from "./furniture-primitive-builder.ts";
+import { normalizeFurnitureProportionStyling } from "./furniture-proportion-styling.ts";
+import {
+  resolveFurnitureRenderMaterial,
+  type FurnitureRenderMaterial,
+} from "./furniture-material-styling.ts";
 
 export interface FurnitureTypeCompositionMesh
   extends BuiltFurniturePrimitive {
   materialTag: FurnitureDescriptorMaterialTag;
   meshId: string;
+  renderMaterial: Readonly<FurnitureRenderMaterial>;
 }
 
 export interface FurnitureTypeComposition {
@@ -40,13 +46,21 @@ export function createFurnitureTypeComposition(
     descriptor.descriptorType === "primitive-composition"
       ? descriptor
       : createFallbackPrimitiveDescriptor(furnitureType, descriptor);
+  const proportionStyledMeshes = normalizeFurnitureProportionStyling(
+    furnitureType,
+    buildFurniturePrimitives(primitiveDescriptor, limits),
+  );
 
-  const meshes = buildFurniturePrimitives(primitiveDescriptor, limits).map(
+  const meshes = proportionStyledMeshes.meshes.map(
     (primitive) =>
       freezeCompositionMesh({
         ...primitive,
         materialTag: descriptor.materialTag,
         meshId: `${furnitureType}:${primitive.partId}`,
+        renderMaterial: resolveFurnitureRenderMaterial(
+          furnitureType,
+          descriptor.materialTag,
+        ),
       }),
   );
 
@@ -183,5 +197,9 @@ function freezeCompositionMesh(
     dimensions: Object.freeze({ ...mesh.dimensions }),
     geometryArgs: Object.freeze([...mesh.geometryArgs]) as typeof mesh.geometryArgs,
     position: Object.freeze({ ...mesh.position }),
+    renderMaterial: Object.freeze({
+      ...mesh.renderMaterial,
+      config: Object.freeze({ ...mesh.renderMaterial.config }),
+    }),
   });
 }

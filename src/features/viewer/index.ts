@@ -161,6 +161,23 @@ export {
   type SupportedFurnitureType,
 } from "./furniture-descriptor-mapping.ts";
 export {
+  createFurnitureTypeComposition,
+  createFurnitureTypeCompositions,
+  type FurnitureTypeComposition,
+  type FurnitureTypeCompositionMesh,
+} from "./furniture-type-composition.ts";
+export {
+  normalizeFurnitureProportionStyling,
+  type FurnitureProportionStylingResult,
+} from "./furniture-proportion-styling.ts";
+export {
+  resolveFurnitureRenderMaterial,
+  type FurnitureMaterialPresetId,
+  type FurnitureMaterialShadingConfig,
+  type FurnitureRenderMaterial,
+  type FurnitureRenderMaterialType,
+} from "./furniture-material-styling.ts";
+export {
   getViewerPresentationPreset,
   type ViewerPresentationPreset,
   type ViewerPresentationPresetVariant,
