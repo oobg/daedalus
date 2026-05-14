@@ -1,4 +1,9 @@
 export {
+  getAmbientLightingPreset,
+  type AmbientLightingPreset,
+  type AmbientLightingPresetVariant,
+} from "./ambient-lighting.ts";
+export {
   createViewerComposition,
   type LoadedViewerScene,
   type ViewerComposition,
@@ -65,3 +70,10 @@ export {
   type FurnitureAssetMetadata,
   type FurnitureAssetMetadataValidationResult,
 } from "./furniture-asset-metadata.ts";
+export {
+  resolveApprovedFurnitureAsset,
+  type ApprovedFurnitureAssetSelection,
+  type FurnitureAssetCatalogEntry,
+  type FurnitureAssetLookupRequest,
+  type FurnitureAssetSelectionResult,
+} from "./furniture-asset-selection.ts";

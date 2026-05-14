@@ -6,6 +6,7 @@ import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
 import {
+  getAmbientLightingPreset,
   createWallMeshAssembly,
   getGlassMaterialConfig,
   getWallShadingConfig,
@@ -27,6 +28,7 @@ const WALL_TOP_EDGE_RADIUS = 0.011;
 const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
+const AMBIENT_LIGHTING = getAmbientLightingPreset();
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
@@ -427,7 +429,10 @@ export default function Viewer25D({
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
-        <ambientLight intensity={0.85} color="#fff8f0" />
+        <ambientLight
+          intensity={AMBIENT_LIGHTING.intensity}
+          color={AMBIENT_LIGHTING.color}
+        />
         <directionalLight
           position={[4, 12, 6]} intensity={0.45} castShadow
           shadow-mapSize-width={1024} shadow-mapSize-height={1024}

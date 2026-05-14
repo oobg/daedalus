@@ -68,9 +68,9 @@ test("createWallMeshAssembly keeps final wall output on the softened geometry pi
 
   for (const fixture of fixtures) {
     const assembly = createWallMeshAssembly(fixture.points, fixture.options);
+    const cornerMeshes = createWallCornerMeshes(fixture.points, fixture.options);
     const expectedCornerMeshes =
-      fixture.expectedCornerMeshes ??
-      createWallCornerMeshes(fixture.points, fixture.options).length;
+      fixture.expectedCornerMeshes ?? cornerMeshes.length;
     const expectedStraightMeshes =
       fixture.expectedStraightMeshes ?? fixture.points.length;
 
@@ -108,5 +108,59 @@ test("createWallMeshAssembly keeps final wall output on the softened geometry pi
         `Expected ${fixture.name} to use only softened wall mesh sources.`,
       );
     }
+
+    if (fixture.points.length > 2) {
+      assertClosedLoopAssemblyOrder(fixture.name, assembly.meshes, cornerMeshes);
+    }
   }
 });
+
+function assertClosedLoopAssemblyOrder(
+  fixtureName: string,
+  meshes: ReturnType<typeof createWallMeshAssembly>["meshes"],
+  cornerMeshes: ReturnType<typeof createWallCornerMeshes>,
+): void {
+  const cornerMeshCounts = new Map<number, number>();
+
+  for (const cornerMesh of cornerMeshes) {
+    cornerMeshCounts.set(
+      cornerMesh.cornerIndex,
+      (cornerMeshCounts.get(cornerMesh.cornerIndex) ?? 0) + 1,
+    );
+  }
+
+  let cursor = 0;
+
+  for (let cornerIndex = 0; cornerIndex < cornerMeshCounts.size; cornerIndex += 1) {
+    const expectedCornerCount = cornerMeshCounts.get(cornerIndex) ?? 0;
+
+    for (let index = 0; index < expectedCornerCount; index += 1) {
+      const mesh = meshes[cursor];
+
+      assert.equal(
+        mesh?.source,
+        "softened-corner-path",
+        `Expected ${fixtureName} to emit corner geometry before the stitched straight span for corner ${cornerIndex}.`,
+      );
+      assert.equal(
+        mesh.cornerIndex,
+        cornerIndex,
+        `Expected ${fixtureName} corner meshes to stay grouped by their original corner index.`,
+      );
+      cursor += 1;
+    }
+
+    assert.equal(
+      meshes[cursor]?.source,
+      "softened-straight-segment",
+      `Expected ${fixtureName} to insert a softened straight span after corner ${cornerIndex}.`,
+    );
+    cursor += 1;
+  }
+
+  assert.equal(
+    cursor,
+    meshes.length,
+    `Expected ${fixtureName} assembly ordering assertions to account for every rendered wall mesh.`,
+  );
+}
