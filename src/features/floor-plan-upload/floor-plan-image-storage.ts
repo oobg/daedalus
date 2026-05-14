@@ -72,6 +72,12 @@ export function loadStoredFloorPlanImage(
   return JSON.parse(serialized) as StoredFloorPlanImageAsset;
 }
 
+export function createFloorPlanImageDataUrl(
+  asset: StoredFloorPlanImageAsset,
+): string {
+  return `data:${asset.mimeType};base64,${asset.contentBase64}`;
+}
+
 export function getFloorPlanAssetStorageKey(assetRef: string): string {
   return `${FLOOR_PLAN_ASSET_STORAGE_KEY_PREFIX}:${assetRef}`;
 }

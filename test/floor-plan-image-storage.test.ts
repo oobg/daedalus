@@ -57,6 +57,36 @@ test("persists an accepted floor plan image and returns a stable asset reference
   assert.deepEqual(loaded, firstSave);
 });
 
+test("persists the same accepted image separately for different floors", async () => {
+  const storage = new InMemoryFloorPlanImageStorage();
+  const file = new File(["shared-binary-image-data"], "floor-plan.png", {
+    type: "image/png",
+  });
+
+  const firstFloorSave = await saveAcceptedFloorPlanImage(
+    {
+      projectId: "project-alpha",
+      floorId: "floor-1",
+      file,
+    },
+    storage,
+  );
+  const secondFloorSave = await saveAcceptedFloorPlanImage(
+    {
+      projectId: "project-alpha",
+      floorId: "floor-2",
+      file,
+    },
+    storage,
+  );
+
+  assert.notEqual(firstFloorSave.assetRef, secondFloorSave.assetRef);
+  assert.match(firstFloorSave.assetRef, /^floor-plan:\/\/project-alpha\/floor-1\//);
+  assert.match(secondFloorSave.assetRef, /^floor-plan:\/\/project-alpha\/floor-2\//);
+  assert.deepEqual(loadStoredFloorPlanImage(firstFloorSave.assetRef, storage), firstFloorSave);
+  assert.deepEqual(loadStoredFloorPlanImage(secondFloorSave.assetRef, storage), secondFloorSave);
+});
+
 test("rejects persistence for files that did not pass image validation", async () => {
   const storage = new InMemoryFloorPlanImageStorage();
   const file = new File(["<svg></svg>"], "plan.svg", { type: "image/svg+xml" });
