@@ -5,8 +5,8 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
+import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
 import {
-  getAmbientLightingPreset,
   createWallMeshAssembly,
   getGlassMaterialConfig,
   getWallShadingConfig,

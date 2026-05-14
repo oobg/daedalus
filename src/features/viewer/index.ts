@@ -1,9 +1,4 @@
 export {
-  getAmbientLightingPreset,
-  type AmbientLightingPreset,
-  type AmbientLightingPresetVariant,
-} from "./ambient-lighting.ts";
-export {
   createViewerComposition,
   type LoadedViewerScene,
   type ViewerComposition,

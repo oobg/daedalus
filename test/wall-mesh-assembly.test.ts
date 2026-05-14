@@ -110,13 +110,19 @@ test("createWallMeshAssembly keeps final wall output on the softened geometry pi
     }
 
     if (fixture.points.length > 2) {
-      assertClosedLoopAssemblyOrder(fixture.name, assembly.meshes, cornerMeshes);
+      assertClosedLoopAssemblyOrder(
+        fixture.name,
+        fixture.points.length,
+        assembly.meshes,
+        cornerMeshes,
+      );
     }
   }
 });
 
 function assertClosedLoopAssemblyOrder(
   fixtureName: string,
+  pointCount: number,
   meshes: ReturnType<typeof createWallMeshAssembly>["meshes"],
   cornerMeshes: ReturnType<typeof createWallCornerMeshes>,
 ): void {
@@ -131,7 +137,7 @@ function assertClosedLoopAssemblyOrder(
 
   let cursor = 0;
 
-  for (let cornerIndex = 0; cornerIndex < cornerMeshCounts.size; cornerIndex += 1) {
+  for (let cornerIndex = 0; cornerIndex < pointCount; cornerIndex += 1) {
     const expectedCornerCount = cornerMeshCounts.get(cornerIndex) ?? 0;
 
     for (let index = 0; index < expectedCornerCount; index += 1) {
