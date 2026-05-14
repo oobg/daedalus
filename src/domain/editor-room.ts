@@ -181,14 +181,25 @@ function validateRoomPolygon(
     }
   }
 
+  if (countDistinctPoints(points) < 3) {
+    return {
+      code: "invalid_room_polygon",
+      message: "Room polygon must contain at least 3 distinct points.",
+    };
+  }
+
   if (calculatePolygonArea(points) === 0) {
     return {
       code: "invalid_room_polygon",
-      message: "Room polygon area must be greater than 0.",
+      message: "Room polygon must define a non-empty closed shape.",
     };
   }
 
   return null;
+}
+
+function countDistinctPoints(points: readonly EditorPoint[]): number {
+  return new Set(points.map((point) => `${point.x},${point.y}`)).size;
 }
 
 function validateSharedBoundaries(

@@ -76,6 +76,44 @@ test("validateEditorRoomInput rejects invalid room polygon data", () => {
   });
 });
 
+test("validateEditorRoomInput rejects polygon edits without three distinct vertices", () => {
+  const result = validateEditorRoomInput({
+    roomId: "room-1",
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 0 },
+    ],
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "invalid_room_polygon",
+      message: "Room polygon must contain at least 3 distinct points.",
+    },
+  });
+});
+
+test("validateEditorRoomInput rejects polygon edits that close to an empty shape", () => {
+  const result = validateEditorRoomInput({
+    roomId: "room-1",
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 16, y: 0 },
+    ],
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "invalid_room_polygon",
+      message: "Room polygon must define a non-empty closed shape.",
+    },
+  });
+});
+
 test("createEditorState uses validated room creation when loading project rooms", () => {
   assert.throws(
     () =>
