@@ -927,6 +927,87 @@ test("updateEditorRoom preserves room openings while dragging polygon vertices",
   );
 });
 
+test("updateEditorRoom can persist translated room openings during whole-room polygon moves", () => {
+  const project = createEditorProject({
+    projectId: "project-room-drag-opening-translation",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Reception",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 4 },
+              { x: 0, y: 4 },
+            ],
+            openings: [
+              {
+                id: "opening-1",
+                type: "door",
+                x: 2,
+                y: 0,
+                angle: 0,
+              },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "edge-opening-1",
+                openingType: "door",
+                attachedEdgeId: "room-1:north",
+                edgeRelativePosition: 0.5,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const nextProject = updateEditorRoom(project, "floor-1", "room-1", {
+    roomPolygon: [
+      { x: 10, y: -4 },
+      { x: 14, y: -4 },
+      { x: 14, y: 0 },
+      { x: 10, y: 0 },
+    ],
+    openings: [
+      {
+        id: "opening-1",
+        type: "door",
+        x: 12,
+        y: -4,
+        angle: 0,
+      },
+    ],
+  });
+
+  assert.equal(nextProject.floors[0].rooms[0].area, 16);
+  assert.deepEqual(nextProject.floors[0].rooms[0].labelPosition, {
+    x: 12,
+    y: -2,
+  });
+  assert.deepEqual(nextProject.floors[0].rooms[0].openings, [
+    {
+      id: "opening-1",
+      type: "door",
+      x: 12,
+      y: -4,
+      angle: 0,
+    },
+  ]);
+  assert.deepEqual(nextProject.floors[0].rooms[0].edgeOpenings, [
+    {
+      openingId: "edge-opening-1",
+      openingType: "door",
+      attachedEdgeId: "room-1:north",
+      edgeRelativePosition: 0.5,
+    },
+  ]);
+});
+
 test("updateEditorRoom keeps a moved shared segment geometrically identical in both adjacent rooms", () => {
   const project = createEditorProject({
     projectId: "project-shared-segment-sync",
@@ -1034,6 +1115,20 @@ test("updateEditorRoom mirrors an inserted shared-boundary vertex into the adjac
                 adjacentEdgeId: "room-2:west",
               },
             ],
+            edgeOpenings: [
+              {
+                openingId: "door-before-insert",
+                openingType: "door",
+                attachedEdgeId: "room-1:edge:1",
+                edgeRelativePosition: 0.25,
+              },
+              {
+                openingId: "window-after-insert",
+                openingType: "window",
+                attachedEdgeId: "room-1:edge:2",
+                edgeRelativePosition: 0.5,
+              },
+            ],
           },
           {
             roomId: "room-2",
@@ -1050,6 +1145,14 @@ test("updateEditorRoom mirrors an inserted shared-boundary vertex into the adjac
                 roomId: "room-2",
                 adjacentRoomId: "room-1",
                 adjacentEdgeId: "room-1:east",
+              },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "adjacent-door",
+                openingType: "door",
+                attachedEdgeId: "room-2:edge:3",
+                edgeRelativePosition: 0.25,
               },
             ],
           },
@@ -1074,6 +1177,28 @@ test("updateEditorRoom mirrors an inserted shared-boundary vertex into the adjac
     { x: 8, y: 4 },
     { x: 4, y: 4 },
     { x: 4, y: 2 },
+  ]);
+  assert.deepEqual(nextProject.floors[0].rooms[0].edgeOpenings, [
+    {
+      openingId: "door-before-insert",
+      openingType: "door",
+      attachedEdgeId: "room-1:edge:1",
+      edgeRelativePosition: 0.5,
+    },
+    {
+      openingId: "window-after-insert",
+      openingType: "window",
+      attachedEdgeId: "room-1:edge:3",
+      edgeRelativePosition: 0.5,
+    },
+  ]);
+  assert.deepEqual(nextProject.floors[0].rooms[1].edgeOpenings, [
+    {
+      openingId: "adjacent-door",
+      openingType: "door",
+      attachedEdgeId: "room-2:edge:3",
+      edgeRelativePosition: 0.5,
+    },
   ]);
   assert.equal(nextProject.floors[0].rooms[0].area, 16);
   assert.equal(nextProject.floors[0].rooms[1].area, 16);

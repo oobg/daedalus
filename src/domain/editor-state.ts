@@ -4,7 +4,31 @@ import {
   createValidatedEditorRoom,
 } from "./editor-room.ts";
 import type { EditorOpening as EdgeAttachedOpening } from "./opening.ts";
-import { createValidatedWallSegment, type WallSegment } from "./wall.ts";
+import {
+  deriveRoomPolygonWalls,
+  getRoomPolygonEdgeId,
+  type RoomPolygonDerivedGeometry,
+} from "./room-polygon-source.ts";
+import type { WallSegment } from "./wall.ts";
+
+export {
+  ROOM_POLYGON_SOURCE_FIELD,
+  calculateRoomPolygonArea,
+  calculateRoomPolygonLabelPosition,
+  createRoomPolygonMapGeometry,
+  createRoomPolygonSource,
+  deriveRoomPolygonGeometry,
+  deriveRoomPolygonWalls,
+  getRoomPolygonEdgeId,
+  replaceRoomPolygonSource,
+} from "./room-polygon-source.ts";
+export type {
+  RoomPolygonMapGeometry,
+  RoomPolygonOpening,
+  RoomPolygonPoint,
+  RoomPolygonSharedBoundary,
+  RoomPolygonSource,
+} from "./room-polygon-source.ts";
 
 export const EDITOR_OBJECT_VERSION = 1;
 export const DEFAULT_PROJECT_NAME = "Untitled Building Guide";
@@ -84,6 +108,8 @@ export interface EditorGuideObject {
 export interface EditorRoomDerivedGeometry {
   walls: EditorWallSegment[];
 }
+
+export type EditorRoomPolygonDerivedGeometry = RoomPolygonDerivedGeometry;
 
 export interface EditorRoom {
   roomId: string;
@@ -174,6 +200,7 @@ export interface UpdateEditorRoomInput {
   roomName?: string;
   roomPolygon?: readonly EditorPoint[];
   sharedBoundaries?: readonly SharedBoundaryRef[];
+  openings?: readonly RoomOpening[];
 }
 
 export function createEditorRoom(input: EditorRoomInput): EditorRoom {
@@ -186,23 +213,7 @@ export function deriveRoomWallsFromPolygon(
   roomId: string,
   roomPolygon: readonly EditorPoint[],
 ): EditorWallSegment[] {
-  const vertices =
-    roomPolygon.length > 1 &&
-    pointsEqual(roomPolygon[0], roomPolygon[roomPolygon.length - 1])
-      ? roomPolygon.slice(0, -1)
-      : roomPolygon;
-
-  if (vertices.length < 2) {
-    return [];
-  }
-
-  return vertices.map((point, index) =>
-    createValidatedWallSegment({
-      edgeId: `${roomId}:edge:${index}`,
-      start: point,
-      end: vertices[(index + 1) % vertices.length],
-    }),
-  );
+  return deriveRoomPolygonWalls(roomId, roomPolygon);
 }
 
 export function createEditorFloor(input: EditorFloorInput): EditorFloor {
@@ -408,14 +419,19 @@ export function updateEditorRoom(
       ...candidateFloor,
       rooms: candidateFloor.rooms.map((candidateRoom) => {
         if (candidateRoom.roomId === room.roomId) {
+          const edgeOpenings = remapEdgeOpeningsForInsertedPolygonVertex(
+            candidateRoom,
+            nextRoomPolygon,
+          );
+
           return createEditorRoom({
             roomId: candidateRoom.roomId,
             roomName: input.roomName ?? candidateRoom.roomName,
             roomPolygon: nextRoomPolygon,
             sharedBoundaries:
               input.sharedBoundaries ?? candidateRoom.sharedBoundaries,
-            openings: candidateRoom.openings,
-            edgeOpenings: candidateRoom.edgeOpenings,
+            openings: input.openings ?? candidateRoom.openings,
+            edgeOpenings,
             metadata: candidateRoom.metadata,
           });
         }
@@ -428,13 +444,18 @@ export function updateEditorRoom(
           return candidateRoom;
         }
 
+        const edgeOpenings = remapEdgeOpeningsForInsertedPolygonVertex(
+          candidateRoom,
+          synchronizedPolygon,
+        );
+
         return createEditorRoom({
           roomId: candidateRoom.roomId,
           roomName: candidateRoom.roomName,
           roomPolygon: synchronizedPolygon,
           sharedBoundaries: candidateRoom.sharedBoundaries,
           openings: candidateRoom.openings,
-          edgeOpenings: candidateRoom.edgeOpenings,
+          edgeOpenings,
           metadata: candidateRoom.metadata,
         });
       }),
@@ -484,6 +505,55 @@ function clonePoints(points: readonly EditorPoint[]): EditorPoint[] {
     x: point.x,
     y: point.y,
   }));
+}
+
+function remapEdgeOpeningsForInsertedPolygonVertex(
+  room: EditorRoom,
+  nextPolygon: readonly EditorPoint[],
+): EditorOpening[] | undefined {
+  const edgeOpenings = room.edgeOpenings;
+
+  if (edgeOpenings == null || edgeOpenings.length === 0) {
+    return edgeOpenings;
+  }
+
+  if (room.roomPolygon.length + 1 !== nextPolygon.length) {
+    return edgeOpenings;
+  }
+
+  const insertedVertexIndex = findInsertedVertexIndex(
+    room.roomPolygon,
+    nextPolygon,
+  );
+
+  if (insertedVertexIndex == null) {
+    return edgeOpenings;
+  }
+
+  const splitEdgeIndex = getWrappedVertexIndex(
+    insertedVertexIndex - 1,
+    room.roomPolygon.length,
+  );
+  const splitPosition = calculateEdgeRelativePosition(
+    room.roomPolygon[splitEdgeIndex],
+    room.roomPolygon[
+      getWrappedVertexIndex(splitEdgeIndex + 1, room.roomPolygon.length)
+    ],
+    nextPolygon[insertedVertexIndex],
+  );
+
+  if (splitPosition == null || splitPosition <= 0 || splitPosition >= 1) {
+    return edgeOpenings;
+  }
+
+  return edgeOpenings.map((opening) =>
+    remapInsertedVertexEdgeOpening(
+      room.roomId,
+      opening,
+      splitEdgeIndex,
+      splitPosition,
+    ),
+  );
 }
 
 function synchronizeSharedBoundaryVertices(
@@ -576,6 +646,85 @@ function synchronizeSharedBoundaryVertices(
   }
 
   return synchronizedPolygons;
+}
+
+function remapInsertedVertexEdgeOpening(
+  roomId: string,
+  opening: EditorOpening,
+  splitEdgeIndex: number,
+  splitPosition: number,
+): EditorOpening {
+  const attachedEdgeIndex = parseRoomPolygonEdgeIndex(
+    roomId,
+    opening.attachedEdgeId,
+  );
+
+  if (attachedEdgeIndex == null) {
+    return opening;
+  }
+
+  if (attachedEdgeIndex < splitEdgeIndex) {
+    return opening;
+  }
+
+  if (attachedEdgeIndex > splitEdgeIndex) {
+    return {
+      ...opening,
+      attachedEdgeId: getRoomPolygonEdgeId(roomId, attachedEdgeIndex + 1),
+    };
+  }
+
+  if (opening.edgeRelativePosition <= splitPosition) {
+    return {
+      ...opening,
+      edgeRelativePosition: clampUnitInterval(
+        opening.edgeRelativePosition / splitPosition,
+      ),
+    };
+  }
+
+  return {
+    ...opening,
+    attachedEdgeId: getRoomPolygonEdgeId(roomId, splitEdgeIndex + 1),
+    edgeRelativePosition: clampUnitInterval(
+      (opening.edgeRelativePosition - splitPosition) / (1 - splitPosition),
+    ),
+  };
+}
+
+function parseRoomPolygonEdgeIndex(
+  roomId: string,
+  edgeId: string,
+): number | null {
+  const prefix = `${roomId}:edge:`;
+
+  if (!edgeId.startsWith(prefix)) {
+    return null;
+  }
+
+  const edgeIndex = Number(edgeId.slice(prefix.length));
+
+  return Number.isInteger(edgeIndex) && edgeIndex >= 0 ? edgeIndex : null;
+}
+
+function calculateEdgeRelativePosition(
+  start: EditorPoint,
+  end: EditorPoint,
+  point: EditorPoint,
+): number | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    return null;
+  }
+
+  return ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+}
+
+function clampUnitInterval(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function synchronizeSharedBoundaryInsertedVertex(

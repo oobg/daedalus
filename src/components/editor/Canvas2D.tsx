@@ -6,7 +6,6 @@ import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image, Group } from "react
 import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   useActiveFloor,
-  useActiveFloorReferenceImageSource,
   useEditorStore,
 } from "@/store/editorStore";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -16,14 +15,17 @@ import {
   getRoomDraftClosurePreviewPoints,
   isRoomDraftClosureTargetActive,
 } from "@/features/editor/model/roomDraftPreview";
+import { getRoomPolygonDraftRenderState } from "@/features/editor/model/roomPolygonDrawingMode";
 import {
-  getSelectedRoomGeometryHandles,
+  getSelectedRoomGeometrySelectionState,
   insertRoomGeometryEdgeVertex,
   moveRoomGeometryHandleVertex,
   removeRoomGeometryHandleVertex,
   type RoomGeometryHandle,
 } from "@/features/editor/model/roomGeometryHandles";
+import { hitTestRoomPolygon } from "@/features/editor/model/roomHitTesting";
 import {
+  DEFAULT_EDITOR_FLOOR_SPACE,
   LOCKED_REFERENCE_IMAGE_LAYER_POLICY,
   calculateReferenceImageCanvasLayout,
 } from "@/features/floor-plan-upload/reference-image-canvas-layout";
@@ -76,20 +78,6 @@ function useRefImage(src: string | null): HTMLImageElement | null {
   }, [src]);
 
   return image;
-}
-
-function pointInPolygon(pt: EditorPoint, poly: EditorPoint[]): boolean {
-  let inside = false;
-  const n = poly.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = poly[i].x, yi = poly[i].y;
-    const xj = poly[j].x, yj = poly[j].y;
-    if ((yi > pt.y) !== (yj > pt.y) &&
-      pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
 
 function getEdgeMidpoint(
@@ -188,10 +176,11 @@ function EmptyHint({ width, height }: { width: number; height: number }) {
 interface Props {
   width: number;
   height: number;
+  referenceImageSource: string | null;
   stageRef?: React.RefObject<unknown>;
 }
 
-export default function Canvas2D({ width, height, stageRef }: Props) {
+export default function Canvas2D({ width, height, referenceImageSource, stageRef }: Props) {
   const activeTool      = useEditorStore(s => s.activeTool);
   const isDrawing       = useEditorStore(s => s.isDrawing);
   const draftPoints     = useEditorStore(s => s.draftPoints);
@@ -203,10 +192,10 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   const commitDraft     = useEditorStore(s => s.commitDraft);
   const selectRoom      = useEditorStore(s => s.selectRoom);
   const updateRoom      = useEditorStore(s => s.updateRoom);
+  const translateRoom   = useEditorStore(s => s.translateRoom);
   const addOpening      = useEditorStore(s => s.addOpening);
 
   const floor    = useActiveFloor();
-  const referenceImageSource = useActiveFloorReferenceImageSource();
   const refImage = useRefImage(referenceImageSource);
 
   // ── Local state ─────────────────────────────────────────────────────────────
@@ -231,7 +220,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
   /** Room under cursor — for opening placement preview. */
   const hoverRoomId = useMemo(() => {
     if (!cursorPos || !floor || !isOpeningActive) return null;
-    return floor.rooms.find(r => pointInPolygon(cursorPos, r.roomPolygon))?.roomId ?? null;
+    return hitTestRoomPolygon({ rooms: floor.rooms }, cursorPos)?.roomId ?? null;
   }, [cursorPos, floor, isOpeningActive]);
 
   /** True when cursor is close enough to close the active draft polygon. */
@@ -279,14 +268,14 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
-  const handleMouseMove = useCallback((e: KonvaEventObject<MouseEvent>) => {
+  const handlePointerMove = useCallback((e: KonvaEventObject<PointerEvent>) => {
     const pos = e.target.getStage()?.getPointerPosition();
     if (pos) setCursorPos({ x: pos.x, y: pos.y });
   }, []);
 
-  const handleMouseLeave = useCallback(() => setCursorPos(null), []);
+  const handlePointerLeave = useCallback(() => setCursorPos(null), []);
 
-  const handleStageClick = useCallback((e: KonvaEventObject<MouseEvent>) => {
+  const handleStagePointerDown = useCallback((e: KonvaEventObject<PointerEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
     const raw = stage.getPointerPosition();
@@ -314,12 +303,15 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
     }
 
     if (activeTool === "select") {
-      selectRoom(null);
+      const target = floor
+        ? hitTestRoomPolygon({ rooms: floor.rooms }, { x: raw.x, y: raw.y })
+        : null;
+      selectRoom(target?.roomId ?? null);
       return;
     }
 
     if (isOpeningActive && activeFloorId && floor) {
-      const target = floor.rooms.find(r => pointInPolygon({ x: raw.x, y: raw.y }, r.roomPolygon));
+      const target = hitTestRoomPolygon({ rooms: floor.rooms }, { x: raw.x, y: raw.y });
       if (target) {
         addOpening(activeFloorId, target.roomId, activeTool as RoomOpeningType, raw.x, raw.y);
       }
@@ -345,6 +337,14 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
       roomPolygon: nextPolygon,
     });
   }, [activeFloorId, selectedRoom, updateRoom]);
+
+  const handleSelectedRoomDragDelta = useCallback((
+    roomId: string,
+    delta: EditorPoint,
+  ) => {
+    if (!activeFloorId) return;
+    translateRoom(activeFloorId, roomId, delta);
+  }, [activeFloorId, translateRoom]);
 
   const handleRoomEdgeInsert = useCallback((edgeIndex: number) => {
     if (!activeFloorId || !selectedRoom) return;
@@ -399,22 +399,15 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
 
   const hasRooms    = floor.rooms.length > 0;
   const hasExterior = exteriorPolygon && exteriorPolygon.length >= 3;
-  const draftFlat   = draftPoints.flatMap(p => [p.x, p.y]);
-  const selectedRoomGeometryHandles = getSelectedRoomGeometryHandles({
+  const draftRenderState = getRoomPolygonDraftRenderState(draftPoints, snappedCursorPos);
+  const selectedRoomGeometrySelection = getSelectedRoomGeometrySelectionState({
     rooms: floor.rooms,
     selectedRoomId,
   });
-  const selectedRoomEdgeHandles = selectedRoom
-    ? selectedRoom.roomPolygon.map((_, edgeIndex) => ({
-        id: `${selectedRoom.roomId}:edge-insert:${edgeIndex}`,
-        edgeIndex,
-        position: getEdgeMidpoint(selectedRoom.roomPolygon, edgeIndex),
-      }))
-    : [];
   const referenceImageLayout = refImage
     ? calculateReferenceImageCanvasLayout({
-        canvasWidth: width,
-        canvasHeight: height,
+        floorSpaceWidth: DEFAULT_EDITOR_FLOOR_SPACE.width,
+        floorSpaceHeight: DEFAULT_EDITOR_FLOOR_SPACE.height,
         imageWidth: refImage.naturalWidth || refImage.width,
         imageHeight: refImage.naturalHeight || refImage.height,
       })
@@ -427,9 +420,9 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
       ref={stageRef as React.RefObject<never>}
       width={width}
       height={height}
-      onClick={handleStageClick}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onPointerDown={handleStagePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
       style={{ cursor }}
     >
       <Layer listening={LOCKED_REFERENCE_IMAGE_LAYER_POLICY.layerListening}>
@@ -490,8 +483,55 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
           return (
             <Group
               key={room.roomId}
-              onClick={(e) => {
-                if (activeTool === "select") { selectRoom(room.roomId); e.cancelBubble = true; }
+              x={0}
+              y={0}
+              draggable={activeTool === "select" && isSelected}
+              onPointerDown={(e) => {
+                if (activeTool === "select") {
+                  const stage = e.target.getStage();
+                  const pointer = stage?.getPointerPosition();
+                  const target = pointer
+                    ? hitTestRoomPolygon({ rooms: floor.rooms }, pointer)
+                    : room;
+
+                  selectRoom(target?.roomId ?? room.roomId);
+                  e.cancelBubble = true;
+                }
+              }}
+              onDragStart={(e) => {
+                e.cancelBubble = true;
+              }}
+              onDragMove={(e) => {
+                e.cancelBubble = true;
+                const delta = {
+                  x: e.target.x(),
+                  y: e.target.y(),
+                };
+
+                e.target.position({ x: 0, y: 0 });
+                handleSelectedRoomDragDelta(room.roomId, delta);
+              }}
+              onDragEnd={(e) => {
+                e.cancelBubble = true;
+                const delta = {
+                  x: e.target.x(),
+                  y: e.target.y(),
+                };
+
+                e.target.position({ x: 0, y: 0 });
+                handleSelectedRoomDragDelta(room.roomId, delta);
+              }}
+              onMouseEnter={e => {
+                if (activeTool === "select" && isSelected) {
+                  const s = e.target.getStage();
+                  if (s) s.container().style.cursor = "move";
+                }
+              }}
+              onMouseLeave={e => {
+                if (activeTool === "select" && isSelected) {
+                  const s = e.target.getStage();
+                  if (s) s.container().style.cursor = cursor;
+                }
               }}
             >
               <Line
@@ -503,6 +543,18 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                 shadowColor={ROOM_STROKE_SELECTED}
                 shadowBlur={6}
                 shadowOpacity={0.3}
+                hitFunc={(context, shape) => {
+                  context.beginPath();
+                  room.roomPolygon.forEach((point, index) => {
+                    if (index === 0) {
+                      context.moveTo(point.x, point.y);
+                    } else {
+                      context.lineTo(point.x, point.y);
+                    }
+                  });
+                  context.closePath();
+                  context.fillStrokeShape(shape);
+                }}
               />
               {lp && (
                 <Text
@@ -522,7 +574,21 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
         {/* Vertex drag handles for selected room */}
         {activeTool === "select" && selectedRoom && activeFloorId &&
           <>
-            {selectedRoomEdgeHandles.map((handle) => (
+            {selectedRoomGeometrySelection && (
+              <Rect
+                name="selected-room-object-frame"
+                x={selectedRoomGeometrySelection.bounds.x - 6}
+                y={selectedRoomGeometrySelection.bounds.y - 6}
+                width={selectedRoomGeometrySelection.bounds.width + 12}
+                height={selectedRoomGeometrySelection.bounds.height + 12}
+                stroke={ROOM_STROKE_SELECTED}
+                strokeWidth={1}
+                dash={[4, 4]}
+                opacity={0.65}
+                listening={false}
+              />
+            )}
+            {selectedRoomGeometrySelection?.edgeHandles.map((handle) => (
               <Circle
                 key={handle.id}
                 name="room-edge-insert-handle"
@@ -530,7 +596,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                 fill={EDGE_INSERT_FILL} stroke={EDGE_INSERT_STROKE}
                 strokeWidth={1.5}
                 opacity={0.9}
-                onMouseDown={e => { e.cancelBubble = true; }}
+                onPointerDown={e => { e.cancelBubble = true; }}
                 onClick={e => {
                   e.cancelBubble = true;
                   handleRoomEdgeInsert(handle.edgeIndex);
@@ -539,14 +605,14 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
                 onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
               />
             ))}
-            {selectedRoomGeometryHandles.map((handle) => (
+            {selectedRoomGeometrySelection?.vertexHandles.map((handle) => (
               <Circle
                 key={handle.id}
                 name="room-geometry-handle"
                 x={handle.position.x} y={handle.position.y} radius={5}
                 fill={VERTEX_FILL} stroke={VERTEX_STROKE} strokeWidth={2}
                 draggable
-                onMouseDown={e => { e.cancelBubble = true; }}
+                onPointerDown={e => { e.cancelBubble = true; }}
                 onClick={e => { e.cancelBubble = true; }}
                 onDblClick={e => {
                   e.cancelBubble = true;
@@ -584,7 +650,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
             {/* Placed edges */}
             {draftPoints.length >= 2 && (
               <Line
-                points={draftFlat}
+                points={draftRenderState.placedEdgePoints}
                 stroke={draftStroke}
                 strokeWidth={draftStrokeWidth}
                 dash={draftDash}
@@ -593,14 +659,9 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
             )}
 
             {/* Rubber band — last point → snapped cursor */}
-            {snappedCursorPos && (
+            {draftRenderState.activeEdgePoints.length === 4 && (
               <Line
-                points={[
-                  draftPoints[draftPoints.length - 1].x,
-                  draftPoints[draftPoints.length - 1].y,
-                  snappedCursorPos.x,
-                  snappedCursorPos.y,
-                ]}
+                points={draftRenderState.activeEdgePoints}
                 stroke={draftStroke}
                 strokeWidth={1.5}
                 dash={[4, 4]}
@@ -622,7 +683,7 @@ export default function Canvas2D({ width, height, stageRef }: Props) {
             )}
 
             {/* Draft vertices */}
-            {draftPoints.map((p, i) => {
+            {draftRenderState.vertexPoints.map((p, i) => {
               const isFirst = i === 0;
               const closeHighlight = isFirst && isNearClose;
               return (

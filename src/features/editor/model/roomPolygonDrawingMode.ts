@@ -11,7 +11,14 @@ export interface RoomPolygonDrawingState {
 export interface CaptureRoomPolygonCanvasClickResult {
   readonly handled: boolean;
   readonly state: RoomPolygonDrawingState;
+  readonly completed?: boolean;
   readonly error?: 'invalid_point' | 'duplicate_point';
+}
+
+export interface RoomPolygonDraftRenderState {
+  readonly vertexPoints: readonly DraftPoint[];
+  readonly placedEdgePoints: number[];
+  readonly activeEdgePoints: number[];
 }
 
 export const isRoomPolygonDrawingTool = (
@@ -37,6 +44,19 @@ const validateDraftPointPlacement = (
   return null;
 };
 
+const isRoomDraftClosingClick = (
+  draftPoints: readonly DraftPoint[],
+  point: DraftPoint,
+): boolean => {
+  const firstPoint = draftPoints[0] ?? null;
+
+  return (
+    firstPoint !== null &&
+    draftPoints.length >= 3 &&
+    pointsMatch(firstPoint, point)
+  );
+};
+
 export const captureRoomPolygonCanvasClick = (
   state: RoomPolygonDrawingState,
   point: DraftPoint,
@@ -45,6 +65,25 @@ export const captureRoomPolygonCanvasClick = (
     return {
       handled: false,
       state,
+    };
+  }
+
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    return {
+      handled: true,
+      state,
+      error: 'invalid_point',
+    };
+  }
+
+  if (state.isDrawing && isRoomDraftClosingClick(state.draftPoints, point)) {
+    return {
+      handled: true,
+      completed: true,
+      state: {
+        ...state,
+        isDrawing: false,
+      },
     };
   }
 
@@ -71,5 +110,26 @@ export const captureRoomPolygonCanvasClick = (
         },
       ],
     },
+  };
+};
+
+export const getRoomPolygonDraftRenderState = (
+  draftPoints: readonly DraftPoint[],
+  cursorPoint: DraftPoint | null,
+): RoomPolygonDraftRenderState => {
+  const placedEdgePoints = draftPoints.flatMap((point) => [point.x, point.y]);
+  const lastPoint = draftPoints[draftPoints.length - 1] ?? null;
+  const activeEdgePoints =
+    lastPoint !== null && cursorPoint !== null
+      ? [lastPoint.x, lastPoint.y, cursorPoint.x, cursorPoint.y]
+      : [];
+
+  return {
+    vertexPoints: draftPoints.map((point) => ({
+      x: point.x,
+      y: point.y,
+    })),
+    placedEdgePoints,
+    activeEdgePoints,
   };
 };

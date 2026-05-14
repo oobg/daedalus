@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   captureRoomPolygonCanvasClick,
+  getRoomPolygonDraftRenderState,
   isRoomPolygonDrawingTool,
 } from './roomPolygonDrawingMode.ts';
 
@@ -10,6 +11,24 @@ test('isRoomPolygonDrawingTool identifies the room polygon drawing mode', () => 
   assert.equal(isRoomPolygonDrawingTool('room'), true);
   assert.equal(isRoomPolygonDrawingTool('select'), false);
   assert.equal(isRoomPolygonDrawingTool('exterior'), false);
+});
+
+test('captureRoomPolygonCanvasClick starts a room polygon draft from the first canvas click', () => {
+  const capture = captureRoomPolygonCanvasClick(
+    {
+      activeTool: 'room',
+      isDrawing: false,
+      draftPoints: [],
+    },
+    { x: 24, y: 36 },
+  );
+
+  assert.equal(capture.handled, true);
+  assert.deepEqual(capture.state, {
+    activeTool: 'room',
+    isDrawing: true,
+    draftPoints: [{ x: 24, y: 36 }],
+  });
 });
 
 test('captureRoomPolygonCanvasClick appends canvas click positions as ordered draft vertices', () => {
@@ -110,5 +129,79 @@ test('captureRoomPolygonCanvasClick rejects duplicate vertex placement attempts'
     handled: true,
     state,
     error: 'duplicate_point',
+  });
+});
+
+test('captureRoomPolygonCanvasClick completes a room polygon when the first vertex is clicked again', () => {
+  const state = {
+    activeTool: 'room',
+    isDrawing: true,
+    draftPoints: [
+      { x: 24, y: 36 },
+      { x: 72, y: 36 },
+      { x: 72, y: 90 },
+    ],
+  };
+
+  const capture = captureRoomPolygonCanvasClick(state, { x: 24, y: 36 });
+
+  assert.deepEqual(capture, {
+    handled: true,
+    completed: true,
+    state: {
+      ...state,
+      isDrawing: false,
+    },
+  });
+});
+
+test('captureRoomPolygonCanvasClick keeps early first-vertex repeats as duplicate attempts', () => {
+  const state = {
+    activeTool: 'room',
+    isDrawing: true,
+    draftPoints: [
+      { x: 24, y: 36 },
+      { x: 72, y: 36 },
+    ],
+  };
+
+  const capture = captureRoomPolygonCanvasClick(state, { x: 24, y: 36 });
+
+  assert.deepEqual(capture, {
+    handled: true,
+    state,
+    error: 'duplicate_point',
+  });
+});
+
+test('getRoomPolygonDraftRenderState exposes placed vertices and in-progress edge points', () => {
+  const renderState = getRoomPolygonDraftRenderState(
+    [
+      { x: 24, y: 36 },
+      { x: 72, y: 36 },
+    ],
+    { x: 72, y: 90 },
+  );
+
+  assert.deepEqual(renderState, {
+    vertexPoints: [
+      { x: 24, y: 36 },
+      { x: 72, y: 36 },
+    ],
+    placedEdgePoints: [24, 36, 72, 36],
+    activeEdgePoints: [72, 36, 72, 90],
+  });
+});
+
+test('getRoomPolygonDraftRenderState omits the active edge until the pointer has a canvas position', () => {
+  const renderState = getRoomPolygonDraftRenderState(
+    [{ x: 24, y: 36 }],
+    null,
+  );
+
+  assert.deepEqual(renderState, {
+    vertexPoints: [{ x: 24, y: 36 }],
+    placedEdgePoints: [24, 36],
+    activeEdgePoints: [],
   });
 });

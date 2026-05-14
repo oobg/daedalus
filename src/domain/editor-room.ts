@@ -1,10 +1,15 @@
 import {
+  calculateRoomPolygonArea,
+  calculateRoomPolygonLabelPosition,
+  createRoomPolygonSource,
+} from "./room-polygon-source.ts";
+import {
   type EditorPoint,
+  type RoomOpening,
+  type EditorOpening,
   type EditorRoom,
   type EditorRoomInput,
   type RoomLabelPosition,
-  type RoomOpening,
-  type EditorOpening,
   type SharedBoundaryRef,
 } from "./editor-state.ts";
 
@@ -105,57 +110,34 @@ export function createValidatedEditorRoom(input: EditorRoomInput): EditorRoom {
 
   const { roomId, roomName, roomPolygon, sharedBoundaries } = validation.value;
 
+  const source = createRoomPolygonSource({
+    roomId,
+    roomPolygon,
+    sharedBoundaries,
+    openings: cloneEdgeOpenings(input.edgeOpenings ?? []),
+  });
+
   return {
     roomId,
     roomName,
-    roomPolygon,
-    sharedBoundaries,
-    area: calculatePolygonArea(roomPolygon),
-    labelPosition: calculatePolygonLabelPosition(roomPolygon),
+    roomPolygon: source.roomPolygon,
+    sharedBoundaries: source.sharedBoundaries,
+    area: calculatePolygonArea(source.roomPolygon),
+    labelPosition: calculatePolygonLabelPosition(source.roomPolygon),
     openings: cloneRoomOpenings(input.openings ?? []),
-    ...optionalArrayField(
-      "edgeOpenings",
-      cloneEdgeOpenings(input.edgeOpenings ?? []),
-    ),
+    ...optionalArrayField("edgeOpenings", source.openings),
     ...optionalMetadataField(input.metadata),
   };
 }
 
 export function calculatePolygonArea(points: readonly EditorPoint[]): number {
-  if (points.length < 3) {
-    return 0;
-  }
-
-  let area = 0;
-
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index];
-    const next = points[(index + 1) % points.length];
-    area += current.x * next.y - next.x * current.y;
-  }
-
-  return Math.abs(area / 2);
+  return calculateRoomPolygonArea(points);
 }
 
 export function calculatePolygonLabelPosition(
   points: readonly EditorPoint[],
 ): RoomLabelPosition | null {
-  if (points.length === 0) {
-    return null;
-  }
-
-  let x = 0;
-  let y = 0;
-
-  for (const point of points) {
-    x += point.x;
-    y += point.y;
-  }
-
-  return {
-    x: x / points.length,
-    y: y / points.length,
-  };
+  return calculateRoomPolygonLabelPosition(points);
 }
 
 function validateRoomPolygon(

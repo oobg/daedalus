@@ -11,9 +11,12 @@ import type {
   SharedBoundaryRef,
   RoomOpening,
   RoomOpeningType,
+  EditorProjectInput,
 } from "@/domain/editor-state";
 import {
+  DEFAULT_FLOOR_HEIGHT,
   createEditorState,
+  createEditorProject,
   addEditorFloor,
   updateEditorFloor,
   removeEditorFloor,
@@ -28,6 +31,8 @@ import {
   collectRoomDraftPoints,
   finalizeEditorRoomDraft,
 } from "@/features/editor/model/roomDraft";
+import { translateRoomGeometrySource } from "@/features/editor/model/roomGeometryHandles";
+import { buildFloorGuideSvgExport } from "@/features/project-export/floor-guide-svg-export";
 
 export type ToolType = "select" | "room" | "exterior" | "door" | "window" | "stair" | "elevator";
 
@@ -51,7 +56,8 @@ interface EditorStoreState {
   commitDraft: () => void;
   setExteriorPolygon: (points: EditorPoint[] | null) => void;
 
-  updateRoom: (floorId: string, roomId: string, input: { roomName?: string; roomPolygon?: EditorPoint[]; sharedBoundaries?: SharedBoundaryRef[] }) => void;
+  updateRoom: (floorId: string, roomId: string, input: { roomName?: string; roomPolygon?: EditorPoint[]; sharedBoundaries?: SharedBoundaryRef[]; openings?: RoomOpening[] }) => void;
+  translateRoom: (floorId: string, roomId: string, delta: EditorPoint) => void;
   removeRoom: (floorId: string, roomId: string) => void;
   selectRoom: (roomId: string | null) => void;
 
@@ -74,7 +80,7 @@ function makeInitialProject(): EditorProject {
   return createEditorState({
     projectId: nanoid(),
     projectName: "New Building Guide",
-    floors: [{ floorId, floorName: "1F", floorHeight: 3 }],
+    floors: [{ floorId, floorName: "1F", floorHeight: DEFAULT_FLOOR_HEIGHT }],
   }).project;
 }
 
@@ -90,7 +96,7 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
     const { project } = get();
     const floorId = nanoid();
     const index = project.floors.length + 1;
-    set({ project: addEditorFloor(project, { floorId, floorName: `${index}F`, floorHeight: 3 }) });
+    set({ project: addEditorFloor(project, { floorId, floorName: `${index}F`, floorHeight: DEFAULT_FLOOR_HEIGHT }) });
   },
 
   updateFloor: (floorId, input) => {
@@ -119,6 +125,11 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
         isDrawing: get().isDrawing,
         draftPoints,
       }, point);
+
+      if (capture.completed) {
+        get().commitDraft();
+        return;
+      }
 
       set({
         isDrawing: capture.state.isDrawing,
@@ -160,11 +171,14 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
       return;
     }
 
+    const nextProject = addEditorRoom(project, activeFloorId, roomInput);
+
     set({
-      project: addEditorRoom(project, activeFloorId, roomInput),
+      project: nextProject,
       isDrawing: false,
       draftPoints: [],
     });
+    get().saveToLocalStorage();
   },
 
   setExteriorPolygon: (points) => {
@@ -173,6 +187,25 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   updateRoom: (floorId, roomId, input) => {
     set({ project: updateEditorRoom(get().project, floorId, roomId, input) });
+  },
+
+  translateRoom: (floorId, roomId, delta) => {
+    const { project } = get();
+    const floor = project.floors.find((candidate) => candidate.floorId === floorId);
+    const room = floor?.rooms.find((candidate) => candidate.roomId === roomId);
+
+    if (!room) return;
+
+    const translatedGeometry = translateRoomGeometrySource(room, delta);
+
+    if (translatedGeometry === null) return;
+
+    set({
+      project: updateEditorRoom(project, floorId, roomId, {
+        roomPolygon: translatedGeometry.roomPolygon,
+        openings: translatedGeometry.openings,
+      }),
+    });
   },
 
   removeRoom: (floorId, roomId) => {
@@ -233,11 +266,11 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   importJSON: (json) => {
     try {
-      const parsed = JSON.parse(json) as EditorProject;
+      const parsed = JSON.parse(json) as Partial<EditorProjectInput>;
       if (!parsed.projectId || !Array.isArray(parsed.floors)) {
         return { ok: false, error: "Invalid project format." };
       }
-      set({ project: parsed });
+      set({ project: createEditorProject(parsed as EditorProjectInput) });
       return { ok: true };
     } catch {
       return { ok: false, error: "Failed to parse JSON." };
@@ -256,9 +289,9 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
-      const parsed = JSON.parse(raw) as EditorProject;
+      const parsed = JSON.parse(raw) as Partial<EditorProjectInput>;
       if (!parsed.projectId || !Array.isArray(parsed.floors)) return false;
-      set({ project: parsed });
+      set({ project: createEditorProject(parsed as EditorProjectInput) });
       return true;
     } catch {
       return false;
@@ -271,26 +304,7 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
     const floor = project.floors.find(f => f.floorId === targetFloorId);
     if (!floor) return;
 
-    const W = 800;
-    const H = 600;
-    const paths = floor.rooms.map(room => {
-      const pts = room.roomPolygon
-        .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-        .join(" ") + " Z";
-      return `  <path d="${pts}" fill="#e8e8e0" stroke="#888" stroke-width="2"><title>${room.roomName}</title></path>`;
-    });
-    const labels = floor.rooms.map(room => {
-      const lp = room.labelPosition;
-      if (!lp) return "";
-      return `  <text x="${lp.x.toFixed(1)}" y="${lp.y.toFixed(1)}" text-anchor="middle" font-size="12" fill="#444">${room.roomName}</text>`;
-    });
-    const svg = [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
-      `  <rect width="${W}" height="${H}" fill="#fafaf8"/>`,
-      ...paths,
-      ...labels,
-      `</svg>`,
-    ].join("\n");
+    const svg = buildFloorGuideSvgExport(floor);
 
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
