@@ -100,6 +100,20 @@ export interface RenderSceneOpening {
   anchor: RenderScenePoint | null;
 }
 
+export type RenderSceneLayerElementClass = "floor" | "furniture" | "wall";
+
+export interface RenderSceneRoomLayer {
+  elementClass: RenderSceneLayerElementClass;
+  order: number;
+  baseElevation: number;
+}
+
+export interface RenderSceneRoomLayers {
+  floor: RenderSceneRoomLayer;
+  furniture: RenderSceneRoomLayer;
+  wall: RenderSceneRoomLayer;
+}
+
 export interface RenderSceneRoom {
   roomId: string;
   roomName: string;
@@ -108,6 +122,7 @@ export interface RenderSceneRoom {
   area: number;
   labelPosition: RenderScenePoint | null;
   bounds: RenderSceneBounds | null;
+  layers: RenderSceneRoomLayers;
   walls: readonly RenderSceneWallSegment[];
   openings: readonly RenderSceneOpening[];
 }
@@ -195,6 +210,7 @@ export const RENDERER_CONTRACT_FIELDS = Object.freeze({
     "area",
     "labelPosition",
     "bounds",
+    "layers",
     "walls",
     "openings",
   ]),

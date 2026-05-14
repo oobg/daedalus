@@ -71,6 +71,7 @@ test("renderer contract field lists cover the required snapshot and scene struct
     "area",
     "labelPosition",
     "bounds",
+    "layers",
     "walls",
     "openings",
   ]);
@@ -152,12 +153,17 @@ test("renderer public types describe a render-ready scene with required fields",
     "boundaries",
     "bounds",
     "labelPosition",
+    "layers",
     "openings",
     "polygon",
     "roomId",
     "roomName",
     "walls",
   ]);
+  assert.deepEqual(
+    Object.keys(scene.floors[0].rooms[0].layers).sort(),
+    ["floor", "furniture", "wall"],
+  );
   assert.deepEqual(Object.keys(scene.floors[0].rooms[0].openings[0]).sort(), [
     "anchor",
     "attachedEdgeId",

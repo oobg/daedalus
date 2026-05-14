@@ -13,10 +13,10 @@ import {
   createExteriorWallMeshAssembly,
   createWallMeshAssembly,
   getGlassMaterialConfig,
+  getViewerLightingConfiguration,
   getViewerPresentationPreset,
   getWallShadingConfig,
 } from "@/features/viewer";
-import { getAmbientLightingPreset } from "@/features/viewer/ambient-lighting";
 import { resolveAmbientOcclusionSettings } from "@/features/viewer/ambient-occlusion";
 import {
   createRoomSurfaceLayout,
@@ -34,7 +34,7 @@ const WALL_TOP_EDGE_RADIUS = 0.011;
 const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
-const AMBIENT_LIGHTING = getAmbientLightingPreset();
+const VIEWER_LIGHTING = getViewerLightingConfiguration();
 const VIEWER_PRESENTATION = getViewerPresentationPreset();
 const DEFAULT_ROOM_LAYER_ELEVATIONS = resolveRoomLayerElevations({
   wallThickness: WALL_THICKNESS,
@@ -604,14 +604,19 @@ export default function Viewer25D({
         />
         <AmbientOcclusionComposer />
         <ambientLight
-          intensity={AMBIENT_LIGHTING.intensity}
-          color={AMBIENT_LIGHTING.color}
+          intensity={VIEWER_LIGHTING.ambientLight.intensity}
+          color={VIEWER_LIGHTING.ambientLight.color}
         />
         <directionalLight
-          position={[4, 12, 6]} intensity={0.45} castShadow
-          shadow-mapSize-width={1024} shadow-mapSize-height={1024}
-          shadow-camera-near={0.5} shadow-camera-far={40}
-          shadow-bias={-0.001}
+          position={VIEWER_LIGHTING.diffuseLight.position}
+          intensity={VIEWER_LIGHTING.diffuseLight.intensity}
+          color={VIEWER_LIGHTING.diffuseLight.color}
+          castShadow={VIEWER_LIGHTING.diffuseLight.castShadow}
+          shadow-mapSize-width={VIEWER_LIGHTING.diffuseLight.shadowMapSize[0]}
+          shadow-mapSize-height={VIEWER_LIGHTING.diffuseLight.shadowMapSize[1]}
+          shadow-camera-near={VIEWER_LIGHTING.diffuseLight.shadowCameraNear}
+          shadow-camera-far={VIEWER_LIGHTING.diffuseLight.shadowCameraFar}
+          shadow-bias={VIEWER_LIGHTING.diffuseLight.shadowBias}
         />
 
         <Suspense fallback={null}>

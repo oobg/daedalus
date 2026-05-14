@@ -1,8 +1,25 @@
 export {
+  getViewerLightingConfiguration,
+  type AmbientViewerLightConfiguration,
+  type DirectionalViewerLightConfiguration,
+  type ViewerLightingConfiguration,
+  type ViewerLightingConfigurationVariant,
+} from "./lighting-configuration.ts";
+export {
   getAmbientLightingPreset,
   type AmbientLightingPreset,
   type AmbientLightingPresetVariant,
 } from "./ambient-lighting.ts";
+export {
+  getAmbientOcclusionPreset,
+  getAmbientOcclusionSoftnessBounds,
+  isAmbientOcclusionSoftProfile,
+  resolveAmbientOcclusionSettings,
+  type AmbientOcclusionCapabilityInput,
+  type AmbientOcclusionSettings,
+  type AmbientOcclusionSoftnessBounds,
+  type AmbientOcclusionPresetVariant,
+} from "./ambient-occlusion.ts";
 export {
   createViewerComposition,
   type LoadedViewerScene,

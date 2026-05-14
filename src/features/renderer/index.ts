@@ -26,4 +26,5 @@ export {
   type RendererEntrypoint,
   type RendererPort,
 } from "./renderer-entrypoint.ts";
+export { resolveRenderSceneRoomLayers } from "./render-scene-layering.ts";
 export { adaptProjectSnapshotToRenderScene } from "./renderer-input-adapter.ts";

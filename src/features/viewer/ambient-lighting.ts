@@ -1,21 +1,21 @@
+import { getViewerLightingConfiguration } from "./lighting-configuration.ts";
+
 export type AmbientLightingPresetVariant = "miniatureArchitecture";
 
 export interface AmbientLightingPreset {
   color: string;
   intensity: number;
+  colorTemperatureKelvin: number;
 }
 
-const AMBIENT_LIGHTING_PRESETS = Object.freeze<
-  Record<AmbientLightingPresetVariant, Readonly<AmbientLightingPreset>>
->({
-  miniatureArchitecture: Object.freeze<AmbientLightingPreset>({
-    color: "#FFF8F0",
-    intensity: 0.85,
-  }),
-});
+const AMBIENT_LIGHTING_PRESET = Object.freeze<AmbientLightingPreset>(((ambientLight) => ({
+  color: ambientLight.color,
+  intensity: ambientLight.intensity,
+  colorTemperatureKelvin: ambientLight.colorTemperatureKelvin,
+}))(getViewerLightingConfiguration("miniatureArchitecture").ambientLight));
 
 export function getAmbientLightingPreset(
   variant: AmbientLightingPresetVariant = "miniatureArchitecture",
 ): Readonly<AmbientLightingPreset> {
-  return AMBIENT_LIGHTING_PRESETS[variant];
+  return AMBIENT_LIGHTING_PRESET;
 }

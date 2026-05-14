@@ -75,6 +75,23 @@ function cloneRenderScene(
                 maxX: room.bounds.maxX,
                 maxY: room.bounds.maxY,
               },
+        layers: {
+          floor: {
+            elementClass: room.layers.floor.elementClass,
+            order: room.layers.floor.order,
+            baseElevation: room.layers.floor.baseElevation,
+          },
+          furniture: {
+            elementClass: room.layers.furniture.elementClass,
+            order: room.layers.furniture.order,
+            baseElevation: room.layers.furniture.baseElevation,
+          },
+          wall: {
+            elementClass: room.layers.wall.elementClass,
+            order: room.layers.wall.order,
+            baseElevation: room.layers.wall.baseElevation,
+          },
+        },
         walls: room.walls.map((wall) => ({
           edgeId: wall.edgeId,
           start: clonePoint(wall.start),

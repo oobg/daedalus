@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { type RendererPort, type RenderSceneData } from "../src/features/renderer/index.ts";
+import {
+  adaptProjectSnapshotToRenderScene,
+  type RendererPort,
+  type RenderSceneData,
+  type RendererSnapshotProject,
+} from "../src/features/renderer/index.ts";
 import { createViewerComposition } from "../src/features/viewer/index.ts";
 
 test("viewer composition renders a supplied render scene without editor state dependencies", () => {
@@ -67,6 +72,42 @@ test("viewer composition exposes only read-only viewer and export capabilities",
   assert.equal(typeof viewer.renderScene, "function");
 });
 
+test("viewer composition preserves distinct ordered floor, furniture, and wall layers in assembled viewer data", () => {
+  const renderer: RendererPort<Readonly<RenderSceneData>> = {
+    render(scene) {
+      return scene;
+    },
+  };
+  const viewer = createViewerComposition(renderer);
+  const scene = adaptProjectSnapshotToRenderScene(createSnapshotProject());
+  const layers =
+    viewer.createLoadedSceneViewer(scene).getScene().floors[0].rooms[0].layers;
+
+  assert.deepEqual(layers, {
+    floor: {
+      elementClass: "floor",
+      order: 0,
+      baseElevation: -0.01575,
+    },
+    furniture: {
+      elementClass: "furniture",
+      order: 1,
+      baseElevation: -0.00175,
+    },
+    wall: {
+      elementClass: "wall",
+      order: 2,
+      baseElevation: 0.014,
+    },
+  });
+  assert.deepEqual(
+    [layers.floor.order, layers.furniture.order, layers.wall.order],
+    [0, 1, 2],
+  );
+  assert.equal(layers.floor.baseElevation < layers.furniture.baseElevation, true);
+  assert.equal(layers.furniture.baseElevation < layers.wall.baseElevation, true);
+});
+
 function createRenderScene(): RenderSceneData {
   return {
     projectId: "project-viewer",
@@ -107,6 +148,23 @@ function createRenderScene(): RenderSceneData {
               minY: 0,
               maxX: 8,
               maxY: 6,
+            },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
             },
             walls: [
               {
@@ -163,6 +221,23 @@ function createRenderScene(): RenderSceneData {
               maxX: 6,
               maxY: 4,
             },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
+            },
             walls: [
               {
                 edgeId: "room-gallery:edge:0",
@@ -176,5 +251,41 @@ function createRenderScene(): RenderSceneData {
         verticalConnectors: [],
       },
     ],
+  };
+}
+
+function createSnapshotProject(): RendererSnapshotProject {
+  return {
+    projectId: "project-layers",
+    projectName: "Layer Study",
+    objectVersion: 1,
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "Ground",
+        floorHeight: 3.5,
+        referenceImage: null,
+        rooms: [
+          {
+            roomId: "room-lounge",
+            roomName: "Lounge",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 6 },
+              { x: 0, y: 6 },
+              { x: 0, y: 0 },
+            ],
+            sharedBoundaries: [],
+            area: 48,
+            labelPosition: { x: 4, y: 3 },
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      selectedRoomId: "room-lounge",
+    },
   };
 }

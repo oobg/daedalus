@@ -135,6 +135,23 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
               maxX: 8,
               maxY: 6,
             },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
+            },
             walls: [
               {
                 edgeId: "edge-lobby-east",
@@ -189,6 +206,23 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
               minY: 0,
               maxX: 6,
               maxY: 4,
+            },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
             },
             walls: [
               {
@@ -273,6 +307,23 @@ test("adaptProjectSnapshotToRenderScene does not retain mutable references to ed
   assert.deepEqual(scene.floors[0].rooms[0].polygon[1], { x: 4, y: 0 });
   assert.deepEqual(scene.floors[0].rooms[0].labelPosition, { x: 2, y: 1 });
   assert.equal(scene.activeFloorId, "floor-1");
+  assert.deepEqual(scene.floors[0].rooms[0].layers, {
+    floor: {
+      elementClass: "floor",
+      order: 0,
+      baseElevation: -0.01575,
+    },
+    furniture: {
+      elementClass: "furniture",
+      order: 1,
+      baseElevation: -0.00175,
+    },
+    wall: {
+      elementClass: "wall",
+      order: 2,
+      baseElevation: 0.014,
+    },
+  });
   assert.deepEqual(scene.floors[0].rooms[0].openings[0].anchor, {
     x: 4,
     y: 0.5,
@@ -321,5 +372,7 @@ test("adaptProjectSnapshotToRenderScene returns a deeply frozen scene tree", () 
   assert.ok(Object.isFrozen(scene.floors[0].rooms[0]));
   assert.ok(Object.isFrozen(scene.floors[0].rooms[0].polygon));
   assert.ok(Object.isFrozen(scene.floors[0].rooms[0].polygon[0]));
+  assert.ok(Object.isFrozen(scene.floors[0].rooms[0].layers));
+  assert.ok(Object.isFrozen(scene.floors[0].rooms[0].layers.floor));
   assert.equal(scene.activeFloorId, "floor-1");
 });

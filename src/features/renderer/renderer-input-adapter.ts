@@ -15,6 +15,7 @@ import type {
   RenderSceneVerticalConnector,
   RenderSceneWallSegment,
 } from "./renderer-contract.ts";
+import { resolveRenderSceneRoomLayers } from "./render-scene-layering.ts";
 
 export function adaptProjectSnapshotToRenderScene(
   project: RendererSnapshotProject,
@@ -84,6 +85,7 @@ function adaptRoomToScene(room: RendererSnapshotRoom): RenderSceneRoom {
     labelPosition:
       room.labelPosition == null ? null : clonePoint(room.labelPosition),
     bounds: calculateBounds(polygon),
+    layers: resolveRenderSceneRoomLayers(),
     walls,
     openings: (room.openings ?? []).map((opening) =>
       adaptOpeningToScene(opening, wallsByEdgeId),
