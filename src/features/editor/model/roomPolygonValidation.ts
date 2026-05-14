@@ -5,6 +5,7 @@ export interface Point2D {
 
 export type RoomPolygonValidationError =
   | 'polygon_requires_three_points'
+  | 'polygon_points_must_be_finite'
   | 'polygon_must_be_closed'
   | 'polygon_requires_three_distinct_vertices'
   | 'polygon_area_must_be_non_zero'
@@ -141,6 +142,17 @@ export const validateRoomPolygon = (
     return {
       ok: false,
       error: 'polygon_requires_three_points',
+    };
+  }
+
+  if (
+    points.some(
+      (point) => !Number.isFinite(point.x) || !Number.isFinite(point.y),
+    )
+  ) {
+    return {
+      ok: false,
+      error: 'polygon_points_must_be_finite',
     };
   }
 

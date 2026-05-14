@@ -33,3 +33,17 @@ test('validateRoomPolygon rejects a self-intersecting room polygon', () => {
     error: 'polygon_self_intersects',
   });
 });
+
+test('validateRoomPolygon rejects non-finite vertex coordinates', () => {
+  const result = validateRoomPolygon([
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: Number.NaN },
+    { x: 0, y: 0 },
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'polygon_points_must_be_finite',
+  });
+});

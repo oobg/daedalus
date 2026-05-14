@@ -16,6 +16,13 @@ export interface RoomPolygon {
   readonly points: readonly DraftPoint[];
 }
 
+export interface FinalizedEditorRoomDraft {
+  readonly roomId: string;
+  readonly roomName: string;
+  readonly roomPolygon: readonly DraftPoint[];
+  readonly sharedBoundaries: readonly [];
+}
+
 export interface MoveRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
@@ -86,6 +93,10 @@ export const finalizeRoomDraftPolygon = (
   const validation = validateRoomPolygon(normalizedPoints);
 
   if (!validation.ok) {
+    if (validation.error === 'polygon_points_must_be_finite') {
+      throw new Error('A room polygon point must use finite x/y coordinates.');
+    }
+
     if (validation.error === 'polygon_self_intersects') {
       throw new Error('A room polygon must not self-intersect.');
     }
@@ -96,6 +107,21 @@ export const finalizeRoomDraftPolygon = (
   return {
     roomId: draft.roomId,
     points: normalizeRoomPolygonPoints(normalizedPoints),
+  };
+};
+
+export const finalizeEditorRoomDraft = (
+  draft: RoomDraftPolygon,
+  roomName: string,
+): FinalizedEditorRoomDraft => {
+  const polygon = finalizeRoomDraftPolygon(draft);
+  const roomPolygon = polygon.points.slice(0, -1);
+
+  return {
+    roomId: polygon.roomId,
+    roomName,
+    roomPolygon,
+    sharedBoundaries: [],
   };
 };
 

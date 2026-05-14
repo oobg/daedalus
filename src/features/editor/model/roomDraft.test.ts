@@ -6,10 +6,12 @@ import {
   collectRoomDraftPoints,
   createRoomDraftPolygon,
   deleteRoomPolygonVertex,
+  finalizeEditorRoomDraft,
   finalizeRoomDraftPolygon,
   insertRoomPolygonVertex,
   moveRoomPolygonVertex,
 } from './roomDraft.ts';
+import { createEditorRoom } from '../../../domain/editor-state.ts';
 
 test('createRoomDraftPolygon starts with an empty ordered point list', () => {
   const draft = createRoomDraftPolygon('room-1');
@@ -117,6 +119,58 @@ test('finalizeRoomDraftPolygon accepts drafts with exactly 3 distinct vertices',
   ]);
 });
 
+test('finalizeEditorRoomDraft converts a valid closed draft into editor room input', () => {
+  const draft = collectRoomDraftPoints('room-13', [
+    { x: 2, y: 2 },
+    { x: 8, y: 2 },
+    { x: 8, y: 6 },
+    { x: 2, y: 6 },
+  ]);
+
+  const room = finalizeEditorRoomDraft(draft, 'Room 2');
+
+  assert.deepEqual(room, {
+    roomId: 'room-13',
+    roomName: 'Room 2',
+    roomPolygon: [
+      { x: 2, y: 2 },
+      { x: 8, y: 2 },
+      { x: 8, y: 6 },
+      { x: 2, y: 6 },
+    ],
+    sharedBoundaries: [],
+  });
+});
+
+test('finalizeEditorRoomDraft can be committed into a derived editor room object', () => {
+  const draft = collectRoomDraftPoints('room-14', [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ]);
+
+  const room = createEditorRoom(finalizeEditorRoomDraft(draft, 'Guide Room'));
+
+  assert.deepEqual(room, {
+    roomId: 'room-14',
+    roomName: 'Guide Room',
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ],
+    sharedBoundaries: [],
+    area: 100,
+    labelPosition: {
+      x: 5,
+      y: 5,
+    },
+    openings: [],
+  });
+});
+
 test('finalizeRoomDraftPolygon rejects drafts with fewer than 3 points', () => {
   const draft = collectRoomDraftPoints('room-6', [
     { x: 1, y: 1 },
@@ -139,6 +193,19 @@ test('finalizeRoomDraftPolygon rejects drafts with fewer than 3 distinct vertice
   assert.throws(
     () => finalizeRoomDraftPolygon(draft),
     /at least 3 distinct vertices/,
+  );
+});
+
+test('finalizeRoomDraftPolygon rejects drafts with non-finite vertex placements', () => {
+  const draft = collectRoomDraftPoints('room-7b', [
+    { x: 1, y: 1 },
+    { x: 4, y: 1 },
+    { x: 3, y: Number.NaN },
+  ]);
+
+  assert.throws(
+    () => finalizeRoomDraftPolygon(draft),
+    /finite x\/y coordinates/,
   );
 });
 
