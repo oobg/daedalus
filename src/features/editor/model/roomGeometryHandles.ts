@@ -1,4 +1,6 @@
 import type { EditorPoint, RoomOpening } from '../../../domain/editor-state.ts';
+import { insertRoomPolygonVertexAt } from './roomPolygonVertexInsertion.ts';
+import { removeRoomPolygonVertexAt } from './roomPolygonVertexRemoval.ts';
 
 export interface RoomGeometryHandleRoom {
   readonly roomId: string;
@@ -187,20 +189,7 @@ export const insertRoomGeometryEdgeVertex = <
   edgeIndex: number,
   position: EditorPoint,
 ): EditorPoint[] | null => {
-  if (edgeIndex < 0 || edgeIndex >= room.roomPolygon.length) {
-    return null;
-  }
-
-  const insertionIndex = edgeIndex + 1;
-
-  return [
-    ...room.roomPolygon.slice(0, insertionIndex),
-    {
-      x: position.x,
-      y: position.y,
-    },
-    ...room.roomPolygon.slice(insertionIndex),
-  ];
+  return insertRoomPolygonVertexAt(room.roomPolygon, { edgeIndex }, position);
 };
 
 export const removeRoomGeometryHandleVertex = <
@@ -221,12 +210,7 @@ export const removeRoomGeometryHandleVertex = <
     return null;
   }
 
-  return room.roomPolygon
-    .filter((_, index) => index !== handle.vertexIndex)
-    .map((point) => ({
-      x: point.x,
-      y: point.y,
-    }));
+  return removeRoomPolygonVertexAt(room.roomPolygon, handle.vertexIndex);
 };
 
 const getEdgeMidpoint = (

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_FLOOR_HEIGHT,
   assignFloorReferenceImage,
+  createFloor,
   deserializeFloor,
   getFloorVerticalOffset,
   parseFloorHeightInput,
@@ -13,8 +14,8 @@ import {
   updateFloorHeight,
 } from "../src/domain/floor.ts";
 
-test("normalizeFloor applies the default height when omitted", () => {
-  const floor = normalizeFloor({
+test("createFloor applies the default height when omitted", () => {
+  const floor = createFloor({
     id: "floor-1",
     name: "Ground Floor",
   });
@@ -23,8 +24,8 @@ test("normalizeFloor applies the default height when omitted", () => {
   assert.equal(floor.referenceImage, null);
 });
 
-test("normalizeFloor applies the default height when undefined", () => {
-  const floor = normalizeFloor({
+test("createFloor applies the default height when undefined", () => {
+  const floor = createFloor({
     id: "floor-2",
     name: "Second Floor",
     height: undefined,
@@ -33,8 +34,8 @@ test("normalizeFloor applies the default height when undefined", () => {
   assert.equal(floor.height, DEFAULT_FLOOR_HEIGHT);
 });
 
-test("normalizeFloor preserves an explicit height", () => {
-  const floor = normalizeFloor({
+test("createFloor preserves an explicit height", () => {
+  const floor = createFloor({
     id: "floor-3",
     name: "Third Floor",
     height: 4.2,
@@ -48,13 +49,13 @@ test("normalizeFloor preserves an explicit height", () => {
   );
 });
 
-test("normalizeFloor rejects non-positive or non-finite heights", () => {
+test("createFloor rejects non-positive or non-finite heights", () => {
   const invalidHeights = [0, -1, Number.NaN, Number.POSITIVE_INFINITY];
 
   for (const height of invalidHeights) {
     assert.throws(
       () =>
-        normalizeFloor({
+        createFloor({
           id: `floor-${String(height)}`,
           name: "Invalid Floor",
           height,
@@ -62,6 +63,17 @@ test("normalizeFloor rejects non-positive or non-finite heights", () => {
       /Floor height must be a number greater than 0\./,
     );
   }
+});
+
+test("normalizeFloor remains an alias of createFloor for existing callers", () => {
+  const input = {
+    id: "floor-compat",
+    name: "Compatibility Floor",
+    height: 3.8,
+    referenceImage: "floor-plan://project-alpha/floor-compat/source.png",
+  } as const;
+
+  assert.deepEqual(normalizeFloor(input), createFloor(input));
 });
 
 test("deserializeFloor then serializeFloor preserves height without loss", () => {
@@ -75,6 +87,26 @@ test("deserializeFloor then serializeFloor preserves height without loss", () =>
   const roundTrippedFloor = serializeFloor(deserializeFloor(serializedFloor));
 
   assert.deepEqual(roundTrippedFloor, serializedFloor);
+});
+
+test("serializeFloor and deserializeFloor preserve height through JSON save and load", () => {
+  const floor = createFloor({
+    id: "floor-5",
+    name: "Fifth Floor",
+    height: 6.25,
+    referenceImage: null,
+  });
+
+  const savedRecord = JSON.stringify(serializeFloor(floor));
+  const loadedRecord = JSON.parse(savedRecord) as {
+    id: string;
+    name: string;
+    height: number;
+    referenceImage: string | null;
+  };
+
+  assert.equal(loadedRecord.height, 6.25);
+  assert.deepEqual(deserializeFloor(loadedRecord), floor);
 });
 
 test("updateFloorHeight updates only the targeted floor", () => {
@@ -246,7 +278,15 @@ test("resolveFloorVerticalPlacements returns cumulative offsets for viewer and e
 });
 
 test("parseFloorHeightInput rejects invalid height values", () => {
-  const invalidInputs = ["", "abc", "0", -2, Number.NaN, Number.POSITIVE_INFINITY];
+  const invalidInputs = [
+    "",
+    "abc",
+    "3m",
+    "0",
+    -2,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ];
 
   for (const input of invalidInputs) {
     const result = parseFloorHeightInput(input);

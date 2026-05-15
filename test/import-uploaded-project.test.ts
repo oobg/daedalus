@@ -97,8 +97,9 @@ test("importUploadedProject extracts and validates the embedded project from an 
 });
 
 test("importUploadedProject defaults missing floor heights from older project JSON", () => {
-  const project = createSerializedProject();
-  delete project.floors[0].floorHeight;
+  const project = createSerializedProject() as unknown as Record<string, unknown>;
+  const floors = project.floors as Array<Record<string, unknown>>;
+  delete floors[0].floorHeight;
 
   const result = importUploadedProject(JSON.stringify(project));
 

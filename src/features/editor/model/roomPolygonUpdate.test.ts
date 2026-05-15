@@ -305,6 +305,10 @@ test('moveActiveRoomPolygonVertex returns an error and preserves state when the 
   assert.deepEqual(result, {
     ok: false,
     error: 'invalid_polygon',
+    validation: {
+      code: 'polygon_area_must_be_non_zero',
+      message: 'A room polygon must define a valid simple closed shape.',
+    },
   });
   assert.deepEqual(state, {
     rooms: [room],

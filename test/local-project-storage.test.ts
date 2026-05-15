@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   clearProjectFromLocalStorage,
+  getActiveProjectIdStorageKey,
   getProjectStorageKey,
+  loadActiveProjectIdFromLocalStorage,
   loadProjectFromLocalStorage,
   saveProjectToLocalStorage,
   type LocalProjectStorage,
@@ -122,6 +124,28 @@ test("saveProjectToLocalStorage overwrites an existing saved project for the sam
   assert.deepEqual(loaded, saved);
   assert.equal(loaded?.project.projectName, "Project Alpha Updated");
   assert.deepEqual(loaded?.project.floors, updatedProject.floors);
+});
+
+test("saveProjectToLocalStorage records the active project id for later restore", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const project: TestProject = {
+    projectId: "project-active",
+    objectVersion: 1,
+    projectName: "Active Project",
+    floors: [],
+    viewState: {
+      activeFloorId: "floor-1",
+      zoom: 1,
+    },
+  };
+
+  saveProjectToLocalStorage(project, storage);
+
+  assert.equal(
+    storage.getItem(getActiveProjectIdStorageKey()),
+    "project-active",
+  );
+  assert.equal(loadActiveProjectIdFromLocalStorage(storage), "project-active");
 });
 
 test("saveProjectToLocalStorage preserves each floor reference image association", () => {
@@ -292,4 +316,24 @@ test("clearProjectFromLocalStorage removes a saved project snapshot", () => {
   clearProjectFromLocalStorage(project.projectId, storage);
 
   assert.equal(loadProjectFromLocalStorage(project.projectId, storage), null);
+});
+
+test("clearProjectFromLocalStorage removes the active project pointer when it targets the cleared project", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const project: TestProject = {
+    projectId: "project-alpha",
+    objectVersion: 1,
+    projectName: "Project Alpha",
+    floors: [],
+    viewState: {
+      activeFloorId: "floor-1",
+      zoom: 1,
+    },
+  };
+
+  saveProjectToLocalStorage(project, storage);
+  clearProjectFromLocalStorage(project.projectId, storage);
+
+  assert.equal(storage.getItem(getActiveProjectIdStorageKey()), null);
+  assert.equal(loadActiveProjectIdFromLocalStorage(storage), null);
 });

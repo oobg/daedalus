@@ -1,4 +1,4 @@
-import { validateFloorPlanImageFile } from "./validate-floor-plan-image-file.ts";
+import { validateFloorPlanImageUpload } from "./validate-floor-plan-image-upload.ts";
 
 const FLOOR_PLAN_ASSET_STORAGE_KEY_PREFIX = "daedalus.floorPlanAsset";
 
@@ -28,7 +28,7 @@ export async function saveAcceptedFloorPlanImage(
   input: SaveFloorPlanImageInput,
   storage: FloorPlanImageStorage,
 ): Promise<StoredFloorPlanImageAsset> {
-  const validation = validateFloorPlanImageFile(input.file);
+  const validation = validateFloorPlanImageUpload(input.file);
 
   if (!validation.ok) {
     throw new Error(

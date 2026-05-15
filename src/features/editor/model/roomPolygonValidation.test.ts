@@ -47,3 +47,17 @@ test('validateRoomPolygon rejects non-finite vertex coordinates', () => {
     error: 'polygon_points_must_be_finite',
   });
 });
+
+test('validateRoomPolygon rejects degenerate closed polygons whose area collapses to zero', () => {
+  const result = validateRoomPolygon([
+    { x: 0, y: 0 },
+    { x: 4, y: 4 },
+    { x: 8, y: 8 },
+    { x: 0, y: 0 },
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'polygon_area_must_be_non_zero',
+  });
+});

@@ -1,4 +1,8 @@
 import { resolveFloorVerticalPlacements } from "../../domain/floor.ts";
+import {
+  DEFAULT_WALL_HEIGHT_SCALE,
+  resolveViewer25DFloorExtrusionDepth,
+} from "../../components/viewer/viewer25dGeometry.ts";
 import type {
   RendererSnapshotFloor,
   RendererSnapshotOpening,
@@ -49,11 +53,21 @@ export function adaptProjectSnapshotToRenderScene(
         throw new Error(`Floor "${floor.floorId}" is missing vertical placement.`);
       }
 
+      const renderVerticalOffset = roundRenderHeight(
+        placement.offset * DEFAULT_WALL_HEIGHT_SCALE,
+      );
+      const renderHeight = resolveViewer25DFloorExtrusionDepth(
+        floor.floorHeight,
+        DEFAULT_WALL_HEIGHT_SCALE,
+      );
+
       return {
         floorId: floor.floorId,
         floorName: floor.floorName,
         floorHeight: floor.floorHeight,
         verticalOffset: placement.offset,
+        renderHeight,
+        renderVerticalOffset,
         referenceImage: floor.referenceImage,
         isActive: floor.floorId === activeFloorId,
         rooms: floor.rooms.map(adaptRoomToScene),
@@ -220,4 +234,8 @@ function deepFreeze<T>(value: T): Readonly<T> {
   }
 
   return Object.freeze(value);
+}
+
+function roundRenderHeight(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
 }

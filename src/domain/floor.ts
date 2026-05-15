@@ -1,3 +1,8 @@
+import {
+  validateFloorHeightValue,
+  type FloorHeightValidationError,
+} from "./floor-height.ts";
+
 export const DEFAULT_FLOOR_HEIGHT = 3;
 
 export interface Floor {
@@ -29,11 +34,6 @@ export interface FloorVerticalPlacement {
 
 export type FloorHeightInput = number | string;
 
-export interface FloorHeightValidationError {
-  code: "invalid_floor_height";
-  message: string;
-}
-
 export type UpdateFloorHeightResult =
   | {
       ok: true;
@@ -52,7 +52,7 @@ export interface AssignFloorReferenceImageInput {
 
 export const MIN_FLOOR_HEIGHT = 0;
 
-export function normalizeFloor(input: FloorInput): Floor {
+export function createFloor(input: FloorInput): Floor {
   const height = input.height ?? DEFAULT_FLOOR_HEIGHT;
   assertValidFloorHeight(height);
 
@@ -64,8 +64,12 @@ export function normalizeFloor(input: FloorInput): Floor {
   };
 }
 
-export function deserializeFloor(input: FloorInput): Floor {
-  return normalizeFloor(input);
+export function normalizeFloor(input: FloorInput): Floor {
+  return createFloor(input);
+}
+
+export function deserializeFloor(input: SerializedFloor | FloorInput): Floor {
+  return createFloor(input);
 }
 
 export function serializeFloor(floor: Floor): SerializedFloor {
@@ -80,17 +84,9 @@ export function serializeFloor(floor: Floor): SerializedFloor {
 export function parseFloorHeightInput(
   input: FloorHeightInput,
 ): number | FloorHeightValidationError {
-  const value =
-    typeof input === "string" ? Number.parseFloat(input.trim()) : input;
+  const result = validateFloorHeightValue(input);
 
-  if (!Number.isFinite(value) || value <= MIN_FLOOR_HEIGHT) {
-    return {
-      code: "invalid_floor_height",
-      message: "Floor height must be a number greater than 0.",
-    };
-  }
-
-  return value;
+  return result.ok ? result.value : result.error;
 }
 
 function assertValidFloorHeight(height: number): void {

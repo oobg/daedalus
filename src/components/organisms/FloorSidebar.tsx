@@ -5,16 +5,14 @@ import { Plus, Trash2, Image, Upload, Download, Save, FolderOpen, FileJson } fro
 import { useEditorStore } from "@/store/editorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import {
   ACCEPTED_FLOOR_PLAN_IMAGE_TYPES,
-  validateFloorPlanImageFile,
-} from "@/features/floor-plan-upload/validate-floor-plan-image-file";
-import { saveAcceptedFloorPlanImage } from "@/features/floor-plan-upload/floor-plan-image-storage";
+} from "@/features/floor-plan-upload/validate-floor-plan-image-upload";
+import { uploadFloorPlanImageToEditor } from "@/features/floor-plan-upload/upload-floor-plan-image-to-editor";
 import {
   formatFloorHeightEditorValue,
-  parseFloorHeightEditorValue,
 } from "@/features/editor/model/floorHeightEditing";
+import { FloorHeightConfiguration } from "@/components/organisms/FloorHeightConfiguration";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -27,11 +25,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export default function FloorSidebar() {
   const floors            = useEditorStore(s => s.project.floors);
   const activeFloorId     = useEditorStore(s => s.project.viewState.activeFloorId);
+  const project           = useEditorStore(s => s.project);
   const addFloor          = useEditorStore(s => s.addFloor);
   const removeFloor       = useEditorStore(s => s.removeFloor);
+  const replaceProject    = useEditorStore(s => s.replaceProject);
   const setActiveFloor    = useEditorStore(s => s.setActiveFloor);
   const updateFloor       = useEditorStore(s => s.updateFloor);
-  const setFloorReferenceImage = useEditorStore(s => s.setFloorReferenceImage);
   const setActiveFloorReferenceImage = useEditorStore(s => s.setActiveFloorReferenceImage);
   const saveToLocalStorage    = useEditorStore(s => s.saveToLocalStorage);
   const loadFromLocalStorage  = useEditorStore(s => s.loadFromLocalStorage);
@@ -70,36 +69,28 @@ export default function FloorSidebar() {
 
   async function handleReferenceImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    const validation = validateFloorPlanImageFile(file);
-
-    if (!validation.ok) {
-      setImageUploadError(validation.message);
-      e.target.value = "";
-      return;
-    }
-
     const targetFloorId = referenceImageUploadFloorIdRef.current ?? activeFloorId;
     referenceImageUploadFloorIdRef.current = null;
 
-    if (!targetFloorId) {
-      e.target.value = "";
-      return;
-    }
-
     try {
-      const asset = await saveAcceptedFloorPlanImage(
+      const result = await uploadFloorPlanImageToEditor(
         {
-          projectId: useEditorStore.getState().project.projectId,
-          floorId: targetFloorId,
-          file: validation.file,
+          project,
+          selectedFloorId: targetFloorId,
+          upload: file,
         },
         window.localStorage,
       );
 
-      setFloorReferenceImage(targetFloorId, asset.assetRef);
+      replaceProject(result.project);
+      saveToLocalStorage();
       setImageUploadError(null);
-    } catch {
-      setImageUploadError("Failed to store the selected floor plan image.");
+    } catch (error) {
+      setImageUploadError(
+        error instanceof Error
+          ? error.message
+          : "Failed to store the selected floor plan image.",
+      );
     } finally {
       e.target.value = "";
     }
@@ -113,17 +104,6 @@ export default function FloorSidebar() {
       activeFloor ? formatFloorHeightEditorValue(activeFloor.floorHeight) : "",
     );
   }, [activeFloor?.floorHeight, activeFloor?.floorId]);
-
-  function handleFloorHeightChange(value: string) {
-    setFloorHeightInput(value);
-
-    if (!activeFloor) return;
-
-    const floorHeight = parseFloorHeightEditorValue(value);
-    if (floorHeight === null) return;
-
-    updateFloor(activeFloor.floorId, { floorHeight });
-  }
 
   function handleFloorHeightBlur() {
     if (!activeFloor) return;
@@ -144,32 +124,15 @@ export default function FloorSidebar() {
           </Button>
         </div>
 
-        <ul className="space-y-0.5">
-          {[...floors].reverse().map(floor => {
-            const isActive = floor.floorId === activeFloorId;
-            return (
-              <li
-                key={floor.floorId}
-                onClick={() => setActiveFloor(floor.floorId)}
-                className={cn(
-                  "flex items-center justify-between px-2.5 py-1.5 rounded-md cursor-pointer",
-                  "text-sm transition-colors duration-75",
-                  isActive
-                    ? "bg-accent text-white"
-                    : "hover:bg-surface-3 text-text-primary"
-                )}
-              >
-                <span className="font-medium truncate">{floor.floorName}</span>
-                <span className={cn(
-                  "text-[11px] shrink-0 ml-1 tabular-nums",
-                  isActive ? "text-white/60" : "text-text-muted"
-                )}>
-                  {floor.floorHeight}m
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <FloorHeightConfiguration
+          floors={floors}
+          activeFloorId={activeFloorId}
+          floorHeightInput={floorHeightInput}
+          onSelectFloor={setActiveFloor}
+          onFloorHeightInputChange={setFloorHeightInput}
+          onFloorHeightChange={({ floorId, floorHeight }) => updateFloor(floorId, { floorHeight })}
+          onFloorHeightInputBlur={handleFloorHeightBlur}
+        />
       </div>
 
       {/* Active floor settings */}
@@ -182,19 +145,6 @@ export default function FloorSidebar() {
             <Input
               value={activeFloor.floorName}
               onChange={e => updateFloor(activeFloor.floorId, { floorName: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label htmlFor="active-floor-height" className="text-[11px] text-text-muted">높이 (m)</label>
-            <Input
-              id="active-floor-height"
-              type="number"
-              min={0.5}
-              step={0.5}
-              value={floorHeightInput}
-              onChange={e => handleFloorHeightChange(e.target.value)}
-              onBlur={handleFloorHeightBlur}
             />
           </div>
 

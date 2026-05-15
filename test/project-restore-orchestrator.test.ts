@@ -277,16 +277,20 @@ test("restoreStoredProjectState rebuilds runtime relationships from a saved loca
 
 test("restoreStoredProjectState defaults missing floor heights from older localStorage records", () => {
   const storage = new InMemoryLocalProjectStorage();
-  const serialized = createSerializedProject();
-  delete serialized.floors[0].floorHeight;
+  const serialized = createSerializedProject() as unknown as Record<string, unknown>;
+  const floors = serialized.floors as Array<Record<string, unknown>>;
+  delete floors[0].floorHeight;
 
   saveProjectToLocalStorage(
-    serialized,
+    serialized as SerializedProjectData,
     storage,
     new Date("2026-05-13T14:00:00.000Z"),
   );
 
-  const restored = restoreStoredProjectState(serialized.projectId, storage);
+  const restored = restoreStoredProjectState(
+    serialized.projectId as string,
+    storage,
+  );
 
   assert.equal(restored?.state.project.floors[0].height, DEFAULT_FLOOR_HEIGHT);
   assert.equal(restored?.state.project.floors[1].height, 4);

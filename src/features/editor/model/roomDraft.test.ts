@@ -8,6 +8,7 @@ import {
   deleteRoomPolygonVertex,
   finalizeEditorRoomDraft,
   finalizeRoomDraftPolygon,
+  instantiateEditorRoomFromDraft,
   insertRoomPolygonVertex,
   moveRoomPolygonVertex,
 } from './roomDraft.ts';
@@ -171,6 +172,35 @@ test('finalizeEditorRoomDraft can be committed into a derived editor room object
   });
 });
 
+test('instantiateEditorRoomFromDraft creates a room object directly from the closed polygon draft', () => {
+  const draft = collectRoomDraftPoints('room-14b', [
+    { x: 0, y: 0 },
+    { x: 6, y: 0 },
+    { x: 6, y: 4 },
+    { x: 0, y: 4 },
+  ]);
+
+  const room = instantiateEditorRoomFromDraft(draft, 'Guide Room B');
+
+  assert.deepEqual(room, {
+    roomId: 'room-14b',
+    roomName: 'Guide Room B',
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 4 },
+      { x: 0, y: 4 },
+    ],
+    sharedBoundaries: [],
+    area: 24,
+    labelPosition: {
+      x: 3,
+      y: 2,
+    },
+    openings: [],
+  });
+});
+
 test('finalizeRoomDraftPolygon rejects drafts with fewer than 3 points', () => {
   const draft = collectRoomDraftPoints('room-6', [
     { x: 1, y: 1 },
@@ -251,6 +281,10 @@ test('moveRoomPolygonVertex rejects moves that would make the polygon self-inter
   assert.deepEqual(result, {
     ok: false,
     error: 'invalid_polygon',
+    validation: {
+      code: 'polygon_area_must_be_non_zero',
+      message: 'A room polygon must define a valid simple closed shape.',
+    },
   });
   assert.deepEqual(polygon.points, [
     { x: 0, y: 0 },
@@ -304,6 +338,10 @@ test('insertRoomPolygonVertex rejects inserts that would make the polygon self-i
   assert.deepEqual(result, {
     ok: false,
     error: 'invalid_polygon',
+    validation: {
+      code: 'polygon_self_intersects',
+      message: 'A room polygon must not self-intersect.',
+    },
   });
   assert.deepEqual(polygon.points, [
     { x: 0, y: 0 },
@@ -356,6 +394,10 @@ test('deleteRoomPolygonVertex rejects deletes that would leave fewer than 3 dist
   assert.deepEqual(result, {
     ok: false,
     error: 'invalid_polygon',
+    validation: {
+      code: 'polygon_requires_three_points',
+      message: 'A room polygon requires at least 3 points.',
+    },
   });
   assert.deepEqual(polygon.points, [
     { x: 0, y: 0 },

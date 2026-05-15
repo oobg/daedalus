@@ -1,3 +1,7 @@
+import { roomPolygonHasSelfIntersection } from './roomPolygonSelfIntersection.ts';
+import { validateMinimumRoomPolygonVertices } from './roomPolygonMinimumVertexValidation.ts';
+import { validateRoomPolygonZeroArea } from './roomPolygonZeroAreaValidation.ts';
+
 export interface Point2D {
   readonly x: number;
   readonly y: number;
@@ -20,120 +24,26 @@ export type ValidateRoomPolygonResult =
       readonly error: RoomPolygonValidationError;
     };
 
+export interface RoomPolygonValidationFailure {
+  readonly code: RoomPolygonValidationError;
+  readonly message: string;
+}
+
+export type RoomPolygonOperationValidationResult =
+  | {
+      readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly error: 'invalid_polygon';
+      readonly validation: RoomPolygonValidationFailure;
+    };
+
 const pointsMatch = (left: Point2D, right: Point2D): boolean =>
   left.x === right.x && left.y === right.y;
 
-const countDistinctPoints = (points: readonly Point2D[]): number =>
-  new Set(points.map((point) => `${point.x},${point.y}`)).size;
-
-const crossProduct = (
-  origin: Point2D,
-  left: Point2D,
-  right: Point2D,
-): number =>
-  (left.x - origin.x) * (right.y - origin.y) -
-  (left.y - origin.y) * (right.x - origin.x);
-
-const polygonArea = (points: readonly Point2D[]): number => {
-  let area = 0;
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const current = points[index];
-    const next = points[index + 1];
-    area += current.x * next.y - next.x * current.y;
-  }
-
-  return area / 2;
-};
-
-const isPointOnSegment = (
-  point: Point2D,
-  start: Point2D,
-  end: Point2D,
-): boolean => {
-  const minX = Math.min(start.x, end.x);
-  const maxX = Math.max(start.x, end.x);
-  const minY = Math.min(start.y, end.y);
-  const maxY = Math.max(start.y, end.y);
-
-  return (
-    point.x >= minX &&
-    point.x <= maxX &&
-    point.y >= minY &&
-    point.y <= maxY
-  );
-};
-
-const segmentsIntersect = (
-  startA: Point2D,
-  endA: Point2D,
-  startB: Point2D,
-  endB: Point2D,
-): boolean => {
-  const orientation1 = crossProduct(startA, endA, startB);
-  const orientation2 = crossProduct(startA, endA, endB);
-  const orientation3 = crossProduct(startB, endB, startA);
-  const orientation4 = crossProduct(startB, endB, endA);
-
-  if (
-    ((orientation1 > 0 && orientation2 < 0) ||
-      (orientation1 < 0 && orientation2 > 0)) &&
-    ((orientation3 > 0 && orientation4 < 0) ||
-      (orientation3 < 0 && orientation4 > 0))
-  ) {
-    return true;
-  }
-
-  if (orientation1 === 0 && isPointOnSegment(startB, startA, endA)) {
-    return true;
-  }
-
-  if (orientation2 === 0 && isPointOnSegment(endB, startA, endA)) {
-    return true;
-  }
-
-  if (orientation3 === 0 && isPointOnSegment(startA, startB, endB)) {
-    return true;
-  }
-
-  if (orientation4 === 0 && isPointOnSegment(endA, startB, endB)) {
-    return true;
-  }
-
-  return false;
-};
-
-export const hasSelfIntersection = (points: readonly Point2D[]): boolean => {
-  const edgeCount = points.length - 1;
-
-  for (let index = 0; index < edgeCount; index += 1) {
-    const startA = points[index];
-    const endA = points[index + 1];
-
-    for (
-      let compareIndex = index + 1;
-      compareIndex < edgeCount;
-      compareIndex += 1
-    ) {
-      const startB = points[compareIndex];
-      const endB = points[compareIndex + 1];
-      const areSameEdge = index === compareIndex;
-      const areAdjacentEdges =
-        Math.abs(index - compareIndex) === 1 ||
-        (index === 0 && compareIndex === edgeCount - 1);
-
-      if (areSameEdge || areAdjacentEdges) {
-        continue;
-      }
-
-      if (segmentsIntersect(startA, endA, startB, endB)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
+export const hasSelfIntersection = (points: readonly Point2D[]): boolean =>
+  roomPolygonHasSelfIntersection(points);
 
 export const validateRoomPolygon = (
   points: readonly Point2D[],
@@ -163,17 +73,21 @@ export const validateRoomPolygon = (
     };
   }
 
-  if (countDistinctPoints(points.slice(0, -1)) < 3) {
+  const minimumVertexValidation = validateMinimumRoomPolygonVertices(points);
+
+  if (!minimumVertexValidation.ok) {
     return {
       ok: false,
-      error: 'polygon_requires_three_distinct_vertices',
+      error: minimumVertexValidation.error,
     };
   }
 
-  if (polygonArea(points) === 0) {
+  const zeroAreaValidation = validateRoomPolygonZeroArea(points);
+
+  if (!zeroAreaValidation.ok) {
     return {
       ok: false,
-      error: 'polygon_area_must_be_non_zero',
+      error: zeroAreaValidation.error,
     };
   }
 
@@ -186,5 +100,43 @@ export const validateRoomPolygon = (
 
   return {
     ok: true,
+  };
+};
+
+export const getRoomPolygonValidationMessage = (
+  error: RoomPolygonValidationError,
+): string => {
+  switch (error) {
+    case 'polygon_requires_three_points':
+      return 'A room polygon requires at least 3 points.';
+    case 'polygon_points_must_be_finite':
+      return 'A room polygon point must use finite x/y coordinates.';
+    case 'polygon_must_be_closed':
+      return 'A room polygon must be closed before room creation.';
+    case 'polygon_requires_three_distinct_vertices':
+      return 'A room polygon requires at least 3 distinct vertices.';
+    case 'polygon_area_must_be_non_zero':
+      return 'A room polygon must define a valid simple closed shape.';
+    case 'polygon_self_intersects':
+      return 'A room polygon must not self-intersect.';
+  }
+};
+
+export const validateRoomPolygonForOperation = (
+  points: readonly Point2D[],
+): RoomPolygonOperationValidationResult => {
+  const validation = validateRoomPolygon(points);
+
+  if (validation.ok) {
+    return validation;
+  }
+
+  return {
+    ok: false,
+    error: 'invalid_polygon',
+    validation: {
+      code: validation.error,
+      message: getRoomPolygonValidationMessage(validation.error),
+    },
   };
 };

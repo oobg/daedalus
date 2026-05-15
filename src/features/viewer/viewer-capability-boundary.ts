@@ -52,6 +52,12 @@ function cloneRenderScene(
       floorName: floor.floorName,
       floorHeight: floor.floorHeight,
       verticalOffset: floor.verticalOffset,
+      ...(floor.renderHeight === undefined
+        ? {}
+        : { renderHeight: floor.renderHeight }),
+      ...(floor.renderVerticalOffset === undefined
+        ? {}
+        : { renderVerticalOffset: floor.renderVerticalOffset }),
       referenceImage: floor.referenceImage,
       isActive: floor.isActive,
       rooms: floor.rooms.map((room) => ({

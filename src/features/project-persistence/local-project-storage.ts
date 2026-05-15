@@ -1,4 +1,6 @@
 const PROJECT_STORAGE_KEY_PREFIX = "daedalus.project";
+const ACTIVE_PROJECT_ID_STORAGE_KEY =
+  `${PROJECT_STORAGE_KEY_PREFIX}:active-project-id`;
 
 export interface LocalProjectStorage {
   getItem(key: string): string | null;
@@ -17,6 +19,10 @@ export interface StoredProjectRecord<TProject extends ProjectSnapshot> {
   project: TProject;
 }
 
+export function getActiveProjectIdStorageKey(): string {
+  return ACTIVE_PROJECT_ID_STORAGE_KEY;
+}
+
 export function getProjectStorageKey(projectId: string): string {
   return `${PROJECT_STORAGE_KEY_PREFIX}:${sanitizeStorageSegment(projectId)}`;
 }
@@ -33,8 +39,23 @@ export function saveProjectToLocalStorage<TProject extends ProjectSnapshot>(
   };
 
   storage.setItem(record.storageKey, JSON.stringify(record));
+  storage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, project.projectId);
 
   return record;
+}
+
+export function loadActiveProjectIdFromLocalStorage(
+  storage: LocalProjectStorage,
+): string | null {
+  const storedProjectId = storage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+
+  if (storedProjectId == null) {
+    return null;
+  }
+
+  const projectId = storedProjectId.trim();
+
+  return projectId.length > 0 ? projectId : null;
 }
 
 export function loadProjectFromLocalStorage<TProject extends ProjectSnapshot>(
@@ -70,6 +91,10 @@ export function clearProjectFromLocalStorage(
   storage: LocalProjectStorage,
 ): void {
   storage.removeItem?.(getProjectStorageKey(projectId));
+
+  if (loadActiveProjectIdFromLocalStorage(storage) === projectId) {
+    storage.removeItem?.(ACTIVE_PROJECT_ID_STORAGE_KEY);
+  }
 }
 
 function sanitizeStorageSegment(value: string): string {

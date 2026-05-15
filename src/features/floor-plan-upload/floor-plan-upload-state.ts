@@ -1,11 +1,11 @@
 import {
-  type FloorPlanImageValidationResult,
-  validateFloorPlanImageFile,
-} from "./validate-floor-plan-image-file.ts";
+  type FloorPlanImageUploadValidationResult,
+  validateFloorPlanImageUpload,
+} from "./validate-floor-plan-image-upload.ts";
 
 export type FloorPlanUploadState = {
   selectedFile: File | null;
-  validation: FloorPlanImageValidationResult;
+  validation: FloorPlanImageUploadValidationResult;
 };
 
 export function createInitialFloorPlanUploadState(): FloorPlanUploadState {
@@ -22,7 +22,7 @@ export function createInitialFloorPlanUploadState(): FloorPlanUploadState {
 export function validateFloorPlanImageSelection(
   file: File | null | undefined,
 ): FloorPlanUploadState {
-  const validation = validateFloorPlanImageFile(file);
+  const validation = validateFloorPlanImageUpload(file);
 
   return {
     selectedFile: validation.ok ? validation.file : null,

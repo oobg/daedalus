@@ -1,13 +1,8 @@
+import type { Floor } from "../../domain/floor.ts";
 import {
-  assignFloorReferenceImage,
-  type Floor,
-} from "../../domain/floor.ts";
-
-export interface ReplaceFloorReferenceImageInput {
-  floors: readonly Floor[];
-  floorId: string;
-  nextReferenceImage: string | null;
-}
+  replaceFloorReferenceImage as replaceFloorReferenceImageMetadata,
+  type ReplaceFloorReferenceImageInput,
+} from "./floor-reference-image-metadata.ts";
 
 export function replaceFloorReferenceImage(
   input: ReplaceFloorReferenceImageInput,
@@ -15,8 +10,5 @@ export function replaceFloorReferenceImage(
   floors: Floor[];
   floor: Floor;
 } {
-  return assignFloorReferenceImage(input.floors, {
-    floorId: input.floorId,
-    referenceImage: input.nextReferenceImage,
-  });
+  return replaceFloorReferenceImageMetadata(input);
 }

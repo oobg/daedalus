@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   validateFloorPlanImageFile,
   ACCEPTED_FLOOR_PLAN_IMAGE_TYPES,
+  ACCEPTED_FLOOR_PLAN_IMAGE_EXTENSIONS,
+  isSupportedFloorPlanImageFileType,
 } from "./validate-floor-plan-image-file.ts";
 import {
   createInitialFloorPlanUploadState,
@@ -40,7 +42,7 @@ test("rejects unsupported file types with an explicit validation result", () => 
 
   assert.equal(result.ok, false);
   assert.equal(result.code, "unsupported_type");
-  assert.match(result.message, /PNG, JPEG, or WebP/);
+  assert.match(result.message, /PNG, JPG, JPEG, or WebP/);
 });
 
 test("rejects files above the upload size limit", () => {
@@ -59,6 +61,55 @@ test("exposes the accepted MIME types as a stable contract", () => {
     "image/jpeg",
     "image/webp",
   ]);
+});
+
+test("exposes the accepted file extensions as a stable contract", () => {
+  assert.deepEqual(ACCEPTED_FLOOR_PLAN_IMAGE_EXTENSIONS, [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+  ]);
+});
+
+test("accepts supported file extensions when the MIME type is unavailable", () => {
+  const file = new File(["binary"], "level-1.JPEG", { type: "" });
+  const result = validateFloorPlanImageFile(file);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.code, "valid");
+});
+
+test("rejects unsupported file extensions when the MIME type is unavailable", () => {
+  const file = new File(["binary"], "level-1.gif", { type: "" });
+  const result = validateFloorPlanImageFile(file);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "unsupported_type");
+});
+
+test("reports support for accepted MIME types and extensions", () => {
+  assert.equal(
+    isSupportedFloorPlanImageFileType({
+      name: "level-1.floorplan",
+      type: "image/png",
+    } as File),
+    true,
+  );
+  assert.equal(
+    isSupportedFloorPlanImageFileType({
+      name: "level-1.webp",
+      type: "",
+    } as File),
+    true,
+  );
+  assert.equal(
+    isSupportedFloorPlanImageFileType({
+      name: "level-1.gif",
+      type: "image/gif",
+    } as File),
+    false,
+  );
 });
 
 test("initial upload state starts invalid until a file is selected", () => {

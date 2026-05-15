@@ -25,7 +25,7 @@ import {
   removeEditorRoom,
   updateEditorProject,
 } from "@/domain/editor-state";
-import { captureRoomPolygonCanvasClick } from "@/features/editor/model/roomPolygonDrawingMode";
+import { collectRoomOutlinePoint } from "@/features/editor/model/roomOutlinePointCollection";
 import { resolveFloorReferenceImageSource } from "@/features/floor-plan-upload/resolve-floor-reference-image-source";
 import {
   collectRoomDraftPoints,
@@ -33,6 +33,11 @@ import {
 } from "@/features/editor/model/roomDraft";
 import { translateRoomGeometrySource } from "@/features/editor/model/roomGeometryHandles";
 import { buildFloorGuideSvgExport } from "@/features/project-export/floor-guide-svg-export";
+import {
+  loadActiveProjectIdFromLocalStorage,
+  loadProjectFromLocalStorage,
+  saveProjectToLocalStorage,
+} from "@/features/project-persistence/local-project-storage";
 
 export type ToolType = "select" | "room" | "exterior" | "door" | "window" | "stair" | "elevator";
 
@@ -43,6 +48,8 @@ interface EditorStoreState {
   activeTool: ToolType;
   isDrawing: boolean;
   draftPoints: EditorPoint[];
+
+  replaceProject: (project: EditorProject) => void;
 
   setActiveTool: (tool: ToolType) => void;
 
@@ -90,6 +97,8 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
   isDrawing: false,
   draftPoints: [],
 
+  replaceProject: (project) => set({ project }),
+
   setActiveTool: (tool) => set({ activeTool: tool, isDrawing: false, draftPoints: [] }),
 
   addFloor: () => {
@@ -120,7 +129,7 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
   addDraftPoint: (point) => {
     const { activeTool, draftPoints } = get();
     if (activeTool === "room") {
-      const capture = captureRoomPolygonCanvasClick({
+      const capture = collectRoomOutlinePoint({
         activeTool,
         isDrawing: get().isDrawing,
         draftPoints,
@@ -279,7 +288,10 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   saveToLocalStorage: () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(get().project));
+      const project = get().project;
+
+      saveProjectToLocalStorage(project, localStorage);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
     } catch {
       // Storage might be unavailable (SSR, private browsing)
     }
@@ -287,6 +299,20 @@ export const useEditorStore = create<EditorStoreState>((set, get) => ({
 
   loadFromLocalStorage: () => {
     try {
+      const activeProjectId = loadActiveProjectIdFromLocalStorage(localStorage);
+
+      if (activeProjectId) {
+        const storedRecord = loadProjectFromLocalStorage<EditorProject>(
+          activeProjectId,
+          localStorage,
+        );
+
+        if (storedRecord?.project) {
+          set({ project: createEditorProject(storedRecord.project) });
+          return true;
+        }
+      }
+
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       const parsed = JSON.parse(raw) as Partial<EditorProjectInput>;

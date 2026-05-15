@@ -49,12 +49,16 @@ export type EditActiveRoomPolygonResult<
       readonly ok: true;
       readonly geometry: GeometryResult;
     } & UpdateActiveRoomPolygonResult<Room>)
-  | {
+  | ({
       readonly ok: false;
       readonly error: GeometryResult extends { readonly error: infer ErrorCode }
         ? ErrorCode
         : never;
-    };
+    } & (GeometryResult extends { readonly validation?: infer Validation }
+      ? {
+          readonly validation?: Validation;
+        }
+      : {}));
 
 export const createRoomPolygon = (
   roomId: string,
@@ -169,6 +173,11 @@ const editActiveRoomPolygon = <
     return {
       ok: false,
       error: result.error,
+      ...('validation' in result && result.validation !== undefined
+        ? {
+            validation: result.validation,
+          }
+        : {}),
     } as EditActiveRoomPolygonResult<Room, GeometryResult>;
   }
 

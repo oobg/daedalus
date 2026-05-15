@@ -1,5 +1,14 @@
+import { closeRoomOutline } from './roomPolygonClosure.ts';
+import { validateMinimumRoomPolygonVertices } from './roomPolygonMinimumVertexValidation.ts';
 import { normalizeRoomPolygonPoints } from './roomPolygonNormalization.ts';
-import { validateRoomPolygon } from './roomPolygonValidation.ts';
+import {
+  validateRoomPolygon,
+  validateRoomPolygonForOperation,
+  type RoomPolygonValidationFailure,
+} from './roomPolygonValidation.ts';
+import { createRoomObjectFromClosedPolygon } from './roomObjectInstantiation.ts';
+import { insertRoomPolygonVertexAt } from './roomPolygonVertexInsertion.ts';
+import { removeRoomPolygonVertexAt } from './roomPolygonVertexRemoval.ts';
 
 export interface DraftPoint {
   readonly x: number;
@@ -27,18 +36,21 @@ export interface MoveRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
   readonly error?: 'vertex_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
 }
 
 export interface InsertRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
   readonly error?: 'vertex_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
 }
 
 export interface DeleteRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
   readonly error?: 'vertex_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
 }
 
 export const createRoomDraftPolygon = (roomId: string): RoomDraftPolygon => ({
@@ -63,16 +75,6 @@ export const collectRoomDraftPoints = (
     createRoomDraftPolygon(roomId),
   );
 
-const pointsMatch = (left: DraftPoint, right: DraftPoint): boolean =>
-  left.x === right.x && left.y === right.y;
-
-const countDistinctPoints = (points: readonly DraftPoint[]): number =>
-  new Set(points.map((point) => `${point.x},${point.y}`)).size;
-
-const isValidRoomPolygon = (points: readonly DraftPoint[]): boolean => {
-  return validateRoomPolygon(points).ok;
-};
-
 export const finalizeRoomDraftPolygon = (
   draft: RoomDraftPolygon,
 ): RoomPolygon => {
@@ -80,13 +82,12 @@ export const finalizeRoomDraftPolygon = (
     throw new Error('A room polygon requires at least 3 points.');
   }
 
-  const firstPoint = draft.points[0];
-  const lastPoint = draft.points[draft.points.length - 1];
-  const normalizedPoints = pointsMatch(firstPoint, lastPoint)
-    ? [...draft.points.slice(0, -1), firstPoint]
-    : [...draft.points, firstPoint];
+  const normalizedPoints = closeRoomOutline(draft.points);
 
-  if (countDistinctPoints(normalizedPoints.slice(0, -1)) < 3) {
+  const minimumVertexValidation =
+    validateMinimumRoomPolygonVertices(normalizedPoints);
+
+  if (!minimumVertexValidation.ok) {
     throw new Error('A room polygon requires at least 3 distinct vertices.');
   }
 
@@ -125,6 +126,20 @@ export const finalizeEditorRoomDraft = (
   };
 };
 
+export const instantiateEditorRoomFromDraft = (
+  draft: RoomDraftPolygon,
+  roomName: string,
+) => {
+  const polygon = finalizeRoomDraftPolygon(draft);
+
+  return createRoomObjectFromClosedPolygon({
+    roomId: polygon.roomId,
+    roomName,
+    closedPolygon: polygon.points,
+    sharedBoundaries: [],
+  });
+};
+
 export const moveRoomPolygonVertex = (
   polygon: RoomPolygon,
   vertexIndex: number,
@@ -151,10 +166,13 @@ export const moveRoomPolygonVertex = (
     return point;
   });
 
-  if (!isValidRoomPolygon(nextPoints)) {
+  const validation = validateRoomPolygonForOperation(nextPoints);
+
+  if (!validation.ok) {
     return {
       ok: false,
       error: 'invalid_polygon',
+      validation: validation.validation,
     };
   }
 
@@ -172,26 +190,26 @@ export const insertRoomPolygonVertex = (
   vertexIndex: number,
   nextPoint: DraftPoint,
 ): InsertRoomPolygonVertexResult => {
-  const lastVertexIndex = polygon.points.length - 2;
+  const nextPoints = insertRoomPolygonVertexAt(
+    polygon.points,
+    { vertexIndex },
+    nextPoint,
+  );
 
-  if (vertexIndex < 0 || vertexIndex > lastVertexIndex) {
+  if (nextPoints === null) {
     return {
       ok: false,
       error: 'vertex_index_out_of_range',
     };
   }
 
-  const insertionIndex = vertexIndex + 1;
-  const nextPoints = [
-    ...polygon.points.slice(0, insertionIndex),
-    nextPoint,
-    ...polygon.points.slice(insertionIndex),
-  ];
+  const validation = validateRoomPolygonForOperation(nextPoints);
 
-  if (!isValidRoomPolygon(nextPoints)) {
+  if (!validation.ok) {
     return {
       ok: false,
       error: 'invalid_polygon',
+      validation: validation.validation,
     };
   }
 
@@ -217,22 +235,22 @@ export const deleteRoomPolygonVertex = (
     };
   }
 
-  const nextOpenPoints =
-    vertexIndex === 0
-      ? polygon.points.slice(1, -1)
-      : [
-          ...polygon.points.slice(0, vertexIndex),
-          ...polygon.points.slice(vertexIndex + 1, -1),
-        ];
-  const nextPoints =
-    nextOpenPoints.length === 0
-      ? []
-      : [...nextOpenPoints, nextOpenPoints[0]];
+  const nextPoints = removeRoomPolygonVertexAt(polygon.points, vertexIndex);
 
-  if (!isValidRoomPolygon(nextPoints)) {
+  if (nextPoints === null) {
+    return {
+      ok: false,
+      error: 'vertex_index_out_of_range',
+    };
+  }
+
+  const validation = validateRoomPolygonForOperation(nextPoints);
+
+  if (!validation.ok) {
     return {
       ok: false,
       error: 'invalid_polygon',
+      validation: validation.validation,
     };
   }
 

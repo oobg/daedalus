@@ -44,13 +44,13 @@ const EDGE_INSERT_STROKE   = "#FFFFFF";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Snap raw point to horizontal/vertical axis from `from` (90° snapping). */
-function applySnap(raw: EditorPoint, from: EditorPoint): EditorPoint {
-  const dx = raw.x - from.x;
-  const dy = raw.y - from.y;
+/** Snap raw point to horizontal/vertical axis from `origin` (90° snapping). */
+function applySnap(raw: EditorPoint, origin: EditorPoint): EditorPoint {
+  const dx = raw.x - origin.x;
+  const dy = raw.y - origin.y;
   return Math.abs(dx) > Math.abs(dy)
-    ? { x: raw.x, y: from.y }
-    : { x: from.x, y: raw.y };
+    ? { x: raw.x, y: origin.y }
+    : { x: origin.x, y: raw.y };
 }
 
 function useRefImage(src: string | null): HTMLImageElement | null {

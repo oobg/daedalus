@@ -158,6 +158,8 @@ export interface RenderSceneFloor {
   floorName: string;
   floorHeight: number;
   verticalOffset: number;
+  renderHeight?: number;
+  renderVerticalOffset?: number;
   referenceImage: string | null;
   isActive: boolean;
   rooms: readonly RenderSceneRoom[];
@@ -215,6 +217,8 @@ export const RENDERER_CONTRACT_FIELDS = Object.freeze({
     "floorName",
     "floorHeight",
     "verticalOffset",
+    "renderHeight",
+    "renderVerticalOffset",
     "referenceImage",
     "isActive",
     "rooms",

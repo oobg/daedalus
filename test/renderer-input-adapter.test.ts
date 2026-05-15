@@ -107,6 +107,8 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
         floorName: "Ground",
         floorHeight: 3.5,
         verticalOffset: 0,
+        renderHeight: 1.05,
+        renderVerticalOffset: 0,
         referenceImage: "floor-plan://project-atlas/floor-1.png",
         isActive: false,
         rooms: [
@@ -185,6 +187,8 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
         floorName: "Upper",
         floorHeight: 4,
         verticalOffset: 3.5,
+        renderHeight: 1.2,
+        renderVerticalOffset: 1.05,
         referenceImage: null,
         isActive: true,
         rooms: [
@@ -274,17 +278,82 @@ test("adaptProjectSnapshotToRenderScene stacks floors from each configured floor
   const scene = adaptProjectSnapshotToRenderScene(project);
 
   assert.deepEqual(
-    scene.floors.map(({ floorId, floorHeight, verticalOffset }) => ({
+    scene.floors.map(
+      ({
+        floorId,
+        floorHeight,
+        verticalOffset,
+        renderHeight,
+        renderVerticalOffset,
+      }) => ({
       floorId,
       floorHeight,
       verticalOffset,
-    })),
+        renderHeight,
+        renderVerticalOffset,
+      }),
+    ),
     [
-      { floorId: "floor-low", floorHeight: 2.25, verticalOffset: 0 },
-      { floorId: "floor-tall", floorHeight: 5.5, verticalOffset: 2.25 },
-      { floorId: "floor-short", floorHeight: 2.75, verticalOffset: 7.75 },
+      {
+        floorId: "floor-low",
+        floorHeight: 2.25,
+        verticalOffset: 0,
+        renderHeight: 0.675,
+        renderVerticalOffset: 0,
+      },
+      {
+        floorId: "floor-tall",
+        floorHeight: 5.5,
+        verticalOffset: 2.25,
+        renderHeight: 1.65,
+        renderVerticalOffset: 0.675,
+      },
+      {
+        floorId: "floor-short",
+        floorHeight: 2.75,
+        verticalOffset: 7.75,
+        renderHeight: 0.825,
+        renderVerticalOffset: 2.325,
+      },
     ],
   );
+});
+
+test("adaptProjectSnapshotToRenderScene derives distinct render-space floor heights from configured floor heights", () => {
+  const scene = adaptProjectSnapshotToRenderScene({
+    projectId: "project-render-heights",
+    projectName: "Render Height Lab",
+    objectVersion: 1,
+    floors: [
+      createMinimalSnapshotFloor("floor-compact", "Compact", 2),
+      createMinimalSnapshotFloor("floor-tall", "Tall", 4.5),
+    ],
+    viewState: {
+      activeFloorId: "floor-compact",
+      selectedRoomId: null,
+    },
+  });
+
+  assert.deepEqual(
+    scene.floors.map(({ floorId, renderHeight, renderVerticalOffset }) => ({
+      floorId,
+      renderHeight,
+      renderVerticalOffset,
+    })),
+    [
+      {
+        floorId: "floor-compact",
+        renderHeight: 0.6,
+        renderVerticalOffset: 0,
+      },
+      {
+        floorId: "floor-tall",
+        renderHeight: 1.35,
+        renderVerticalOffset: 0.6,
+      },
+    ],
+  );
+  assert.notEqual(scene.floors[0].renderHeight, scene.floors[1].renderHeight);
 });
 
 test("adaptProjectSnapshotToRenderScene does not retain mutable references to editor snapshot objects", () => {
