@@ -2,12 +2,14 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, FileDown } from "lucide-react";
 import Toolbar from "@/components/organisms/Toolbar";
 import FloorSidebar from "@/components/organisms/FloorSidebar";
 import PropertyPanel from "@/components/organisms/PropertyPanel";
 import { Button } from "@/components/ui/button";
 import { useActiveFloorReferenceImage, useEditorStore } from "@/store/editorStore";
+import { projectEditorStateForRenderer, adaptProjectSnapshotToRenderScene } from "@/features/renderer";
+import { buildFloorGuideSvgExport } from "@/features/project-export/floor-guide-svg-export";
 import { cn } from "@/lib/utils";
 
 const Canvas2D  = dynamic(() => import("@/components/editor/Canvas2D"),  { ssr: false });
@@ -53,6 +55,22 @@ export default function EditorPage() {
     a.click();
   }, []);
 
+  const handleExportSVG = useCallback(() => {
+    const project  = useEditorStore.getState().project;
+    const snapshot = projectEditorStateForRenderer(project);
+    const scene    = adaptProjectSnapshotToRenderScene(snapshot);
+    const floor    = scene.floors.find(f => f.floorId === activeFloorId) ?? scene.floors[0];
+    if (!floor) return;
+    const svgString = buildFloorGuideSvgExport(floor);
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "floor-guide.svg";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [activeFloorId]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-2">
       <Toolbar />
@@ -81,10 +99,16 @@ export default function EditorPage() {
         {/* Secondary actions */}
         <div className="ml-auto flex items-center gap-1">
           {viewMode === "edit" && (
-            <Button variant="ghost" size="xs" onClick={handleExportPNG} className="gap-1.5">
-              <Download size={11} strokeWidth={1.8} />
-              PNG 저장
-            </Button>
+            <>
+              <Button variant="ghost" size="xs" onClick={handleExportPNG} className="gap-1.5">
+                <Download size={11} strokeWidth={1.8} />
+                PNG 저장
+              </Button>
+              <Button variant="ghost" size="xs" onClick={handleExportSVG} className="gap-1.5">
+                <FileDown size={11} strokeWidth={1.8} />
+                SVG 저장
+              </Button>
+            </>
           )}
           <Button
             variant="ghost"
