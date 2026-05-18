@@ -509,6 +509,74 @@ test("restoreProjectFromImport applies the default height when loaded floor data
   assert.equal(restored.floors[0].height, DEFAULT_FLOOR_HEIGHT);
 });
 
+test("restoreProjectFromImport restores each persisted floor height onto the matching floor without cross-floor leakage", () => {
+  const importedProject: SerializedProjectData = {
+    projectId: "project-floor-height-restore",
+    projectName: "Floor Height Restore",
+    objectVersion: 6,
+    floors: [
+      {
+        floorId: "floor-roof",
+        floorName: "Roof",
+        floorHeight: 5.95,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        floorId: "floor-lobby",
+        floorName: "Lobby",
+        floorHeight: 3.1,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        floorId: "floor-basement",
+        floorName: "Basement",
+        floorHeight: 2.45,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-lobby",
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      uploadedProjectName: "floor-height-restore.json",
+    },
+    assets: [],
+    annotations: [],
+    editorConfig: {
+      selectedTool: "select",
+      snapToGrid: true,
+      gridSize: 32,
+      showGrid: true,
+      showReferenceImages: true,
+      showRoomLabels: true,
+    },
+  };
+
+  const restored = restoreProjectFromImport(importedProject);
+  const restoredHeightsByFloorId = Object.fromEntries(
+    restored.floors.map((floor) => [floor.id, floor.height]),
+  );
+
+  assert.deepEqual(restoredHeightsByFloorId, {
+    "floor-roof": 5.95,
+    "floor-lobby": 3.1,
+    "floor-basement": 2.45,
+  });
+
+  restored.floors[0].height = 7.25;
+
+  assert.equal(restored.floors[0].height, 7.25);
+  assert.equal(restored.floors[1].height, 3.1);
+  assert.equal(restored.floors[2].height, 2.45);
+  assert.equal(importedProject.floors[0].floorHeight, 5.95);
+});
+
 test("restoreProjectFromImport clones imported floor and room geometry into mutable editor state", () => {
   const importedProject: SerializedProjectData = {
     projectId: "project-imported",

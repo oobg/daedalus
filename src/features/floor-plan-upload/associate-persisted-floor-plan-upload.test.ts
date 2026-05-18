@@ -70,6 +70,34 @@ test("associatePersistedFloorPlanUploadToFloor rejects a persisted upload from a
   );
 });
 
+test("associatePersistedFloorPlanUploadToFloor rejects linking a persisted upload when the target floor already has an association", () => {
+  const floors = [
+    normalizeFloor({
+      id: "floor-1",
+      name: "Ground Floor",
+      referenceImage: "floor-plan://project-alpha/floor-1/existing.png",
+    }),
+    normalizeFloor({
+      id: "floor-2",
+      name: "Second Floor",
+      referenceImage: null,
+    }),
+  ];
+
+  assert.throws(
+    () =>
+      associatePersistedFloorPlanUploadToFloor({
+        floors,
+        floorId: "floor-1",
+        persistedUpload: {
+          floorId: "floor-1",
+          assetRef: "floor-plan://project-alpha/floor-1/uploaded-ground.png",
+        },
+      }),
+    /already has an associated reference image/,
+  );
+});
+
 test("associatePersistedFloorPlanUploadToFloor preserves the floor-to-image mapping across write then query without mutating inputs", () => {
   const floors = [
     normalizeFloor({

@@ -44,6 +44,31 @@ test("assign associates one floor-plan image asset with the specified floor reco
   assert.equal(result.floors[1], floors[1]);
 });
 
+test("assign rejects attaching a floor-plan image when the floor already has an associated reference", () => {
+  const floors = [
+    normalizeFloor({
+      id: "floor-1",
+      name: "Ground Floor",
+      referenceImage: "floor-plan://project-alpha/floor-1/existing.png",
+    }),
+    normalizeFloor({
+      id: "floor-2",
+      name: "Second Floor",
+      referenceImage: null,
+    }),
+  ];
+
+  assert.throws(
+    () =>
+      assignFloorReferenceImageToFloor({
+        floors,
+        floorId: "floor-1",
+        referenceImageAssetRef: "floor-plan://project-alpha/floor-1/assigned.png",
+      }),
+    /already has an associated reference image/,
+  );
+});
+
 test("replace swaps the assigned floor-plan image asset for one floor without touching others", () => {
   const floors = [
     normalizeFloor({

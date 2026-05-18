@@ -28,6 +28,18 @@ export interface FloorReferenceImageMetadataUpdateResult {
 export function assignFloorReferenceImageToFloor(
   input: AssignFloorReferenceImageToFloorInput,
 ): FloorReferenceImageMetadataUpdateResult {
+  const floor = input.floors.find(({ id }) => id === input.floorId);
+
+  if (floor == null) {
+    throw new Error(`Floor "${input.floorId}" was not found.`);
+  }
+
+  if (floor.referenceImage != null) {
+    throw new Error(
+      `Floor "${input.floorId}" already has an associated reference image.`,
+    );
+  }
+
   return assignFloorReferenceImage(input.floors, {
     floorId: input.floorId,
     referenceImage: input.referenceImageAssetRef,
