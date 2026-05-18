@@ -34,7 +34,7 @@ import {
   updateRoomPolygonVertexDragging,
   type RoomPolygonVertexDragSession,
 } from "@/features/editor/model/roomPolygonVertexDragging";
-import { hitTestRoomPolygon } from "@/features/editor/model/roomHitTesting";
+import { hitTestRoomPolygon, isPointInRoomPolygon } from "@/features/editor/model/roomHitTesting";
 import {
   DEFAULT_EDITOR_FLOOR_SPACE,
   LOCKED_REFERENCE_IMAGE_LAYER_POLICY,
@@ -206,7 +206,9 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
   const insertRoomVertexOnEdge = useEditorStore(s => s.insertRoomVertexOnEdge);
   const removeRoomVertex = useEditorStore(s => s.removeRoomVertex);
   const translateRoom   = useEditorStore(s => s.translateRoom);
-  const addOpening      = useEditorStore(s => s.addOpening);
+  const addOpening           = useEditorStore(s => s.addOpening);
+  const addExteriorOpening   = useEditorStore(s => s.addExteriorOpening);
+  const exteriorEdgeOpenings = useEditorStore(s => s.project.exteriorEdgeOpenings ?? []);
 
   const floor    = useActiveFloor();
   const refImage = useRefImage(referenceImageSource);
@@ -252,6 +254,13 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
     return hitTestRoomPolygon({ rooms: floor.rooms }, cursorPos)?.roomId ?? null;
   }, [cursorPos, floor, isOpeningActive]);
 
+  /** True when cursor is inside exterior polygon but not inside any room. */
+  const isOverExteriorArea = useMemo(() => {
+    if (!cursorPos || !isOpeningActive || !exteriorPolygon || exteriorPolygon.length < 3) return false;
+    if (hoverRoomId) return false;
+    return isPointInRoomPolygon(cursorPos, exteriorPolygon);
+  }, [cursorPos, isOpeningActive, exteriorPolygon, hoverRoomId]);
+
   /** True when cursor is close enough to close the active draft polygon. */
   const isNearClose = useMemo(() => {
     if (!isDrawingTool || !isDrawing) return false;
@@ -292,7 +301,7 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
 
   const cursor =
     isDrawingTool ? "crosshair" :
-    isOpeningActive ? (hoverRoomId ? "crosshair" : "not-allowed") :
+    isOpeningActive ? (hoverRoomId || isOverExteriorArea ? "crosshair" : "not-allowed") :
     "default";
 
   // ── Event handlers ────────────────────────────────────────────────────────
@@ -375,10 +384,14 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
       const target = hitTestRoomPolygon({ rooms: floor.rooms }, { x: raw.x, y: raw.y });
       if (target) {
         addOpening(activeFloorId, target.roomId, activeTool as RoomOpeningType, raw.x, raw.y);
+      } else if (exteriorPolygon && exteriorPolygon.length >= 3 &&
+                 isPointInRoomPolygon({ x: raw.x, y: raw.y }, exteriorPolygon)) {
+        addExteriorOpening(activeTool as RoomOpeningType, raw.x, raw.y);
       }
     }
   }, [activeTool, shiftHeld, draftPoints, addDraftPoint, commitDraft,
-      activeFloorId, floor, addOpening, selectRoom, isOpeningActive, shouldCommitNearClose,
+      activeFloorId, floor, addOpening, addExteriorOpening, exteriorPolygon,
+      selectRoom, isOpeningActive, shouldCommitNearClose,
       isDrawing, roomPointerSession]);
 
   const handleStagePointerUp = useCallback((e: KonvaEventObject<PointerEvent>) => {
@@ -831,8 +844,13 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
           </>
         }
 
+        {/* Exterior opening symbols */}
+        {exteriorEdgeOpenings.map(op => (
+          <OpeningSymbol key={op.id} type={op.type} x={op.x} y={op.y} />
+        ))}
+
         {/* Opening placement preview */}
-        {isOpeningActive && cursorPos && hoverRoomId && (
+        {isOpeningActive && cursorPos && (hoverRoomId || isOverExteriorArea) && (
           <OpeningSymbol type={activeTool as RoomOpeningType} x={cursorPos.x} y={cursorPos.y} alpha={0.55} />
         )}
 

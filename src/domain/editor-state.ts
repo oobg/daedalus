@@ -146,6 +146,7 @@ export interface EditorProject {
   floors: EditorFloor[];
   viewState: EditorViewState;
   exteriorPolygon: EditorPoint[] | null;
+  exteriorEdgeOpenings: RoomOpening[];
   metadata?: EditorDomainMetadata;
 }
 
@@ -181,6 +182,7 @@ export interface EditorProjectInput {
   floors?: readonly EditorFloorInput[];
   viewState?: Partial<EditorViewState>;
   exteriorPolygon?: EditorPoint[] | null;
+  exteriorEdgeOpenings?: RoomOpening[];
   metadata?: EditorDomainMetadata;
 }
 
@@ -249,6 +251,7 @@ export function createEditorProject(input: EditorProjectInput): EditorProject {
       selectedRoomId: input.viewState?.selectedRoomId ?? null,
     },
     exteriorPolygon: input.exteriorPolygon ?? null,
+    exteriorEdgeOpenings: input.exteriorEdgeOpenings ?? [],
     ...optionalMetadataField(input.metadata),
   };
 }

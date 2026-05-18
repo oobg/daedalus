@@ -7,6 +7,7 @@ import {
   type EditorProject,
   type EditorRoom,
   type EditorVerticalConnector,
+  type RoomOpening,
   type SharedBoundaryRef,
 } from "../../domain/editor-state.ts";
 import type { EditorOpening } from "../../domain/opening.ts";
@@ -75,12 +76,21 @@ export interface SerializedEditorProjectViewState {
   selectedRoomId: string | null;
 }
 
+export interface SerializedEditorProjectExteriorOpening {
+  id: string;
+  type: "door" | "window" | "stair" | "elevator";
+  x: number;
+  y: number;
+  angle: number;
+}
+
 export interface SerializedEditorProjectDocument {
   projectId: string;
   projectName: string;
   objectVersion: number;
   floors: SerializedEditorProjectFloor[];
   viewState: SerializedEditorProjectViewState;
+  exteriorEdgeOpenings: SerializedEditorProjectExteriorOpening[];
 }
 
 export function serializeEditorProjectToJsonDocument(
@@ -95,6 +105,9 @@ export function serializeEditorProjectToJsonDocument(
       activeFloorId: project.viewState.activeFloorId,
       selectedRoomId: project.viewState.selectedRoomId,
     },
+    exteriorEdgeOpenings: (project.exteriorEdgeOpenings ?? []).map(
+      serializeExteriorOpening,
+    ),
   };
 }
 
@@ -195,5 +208,17 @@ function serializePoint(point: EditorPoint): SerializedEditorProjectPoint {
   return {
     x: point.x,
     y: point.y,
+  };
+}
+
+function serializeExteriorOpening(
+  opening: RoomOpening,
+): SerializedEditorProjectExteriorOpening {
+  return {
+    id: opening.id,
+    type: opening.type,
+    x: opening.x,
+    y: opening.y,
+    angle: opening.angle,
   };
 }

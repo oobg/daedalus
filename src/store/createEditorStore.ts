@@ -121,6 +121,8 @@ export interface EditorStoreState {
     y: number,
   ) => void;
   removeOpening: (floorId: string, roomId: string, openingId: string) => void;
+  addExteriorOpening: (type: RoomOpeningType, x: number, y: number) => void;
+  removeExteriorOpening: (openingId: string) => void;
   exportJSON: () => string;
   importJSON: (json: string) => { ok: true } | { ok: false; error: string };
   saveToLocalStorage: () => void;
@@ -164,6 +166,7 @@ function normalizeProjectForStore(
     })),
     viewState: project.viewState,
     exteriorPolygon: project.exteriorPolygon,
+    exteriorEdgeOpenings: project.exteriorEdgeOpenings,
     metadata: project.metadata,
   });
 }
@@ -516,6 +519,33 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
           ),
         },
       }));
+    },
+
+    addExteriorOpening: (type, x, y) => {
+      const opening: RoomOpening = { id: nanoid(), type, x, y, angle: 0 };
+
+      set((state) => ({
+        project: {
+          ...state.project,
+          exteriorEdgeOpenings: [
+            ...(state.project.exteriorEdgeOpenings ?? []),
+            opening,
+          ],
+        },
+      }));
+      get().saveToLocalStorage();
+    },
+
+    removeExteriorOpening: (openingId) => {
+      set((state) => ({
+        project: {
+          ...state.project,
+          exteriorEdgeOpenings: (state.project.exteriorEdgeOpenings ?? []).filter(
+            (op) => op.id !== openingId,
+          ),
+        },
+      }));
+      get().saveToLocalStorage();
     },
 
     exportJSON: () => JSON.stringify(get().project, null, 2),

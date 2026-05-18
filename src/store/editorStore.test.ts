@@ -532,6 +532,7 @@ test("replaceProject normalizes closed room polygons and recalculates derived ro
       selectedRoomId: null,
     },
     exteriorPolygon: null,
+    exteriorEdgeOpenings: [],
   });
 
   const replacedRoom = store.getState().project.floors[0]?.rooms[0];

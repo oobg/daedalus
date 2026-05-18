@@ -250,15 +250,14 @@ function LocalizedContactShadow({
 // ExtrudeGeometry depth goes in the shape's +Z which, after rotation [-PI/2,0,0],
 // maps to world +Y — so symbols extrude upward.
 
-const EX_DOOR_PANEL  = { depth: 0.065, bevelEnabled: false } as const;
-const EX_DOOR_ARC    = { depth: 0.022, bevelEnabled: false } as const;
-const EX_WINDOW      = { depth: 0.050, bevelEnabled: false } as const;
-const EX_WINDOW_PANE = { depth: 0.012, bevelEnabled: false } as const;
-const EX_ELEV        = { depth: 0.070, bevelEnabled: false } as const;
-
 // Door — solid extruded panel + shallow translucent arc sweep
-function DoorSymbol3D({ x, z }: { x: number; z: number }) {
+function DoorSymbol3D({ x, z, wallH, isActive }: { x: number; z: number; wallH: number; isActive: boolean }) {
   const r = 0.17, ri = 0.150, t = 0.022;
+  const panelDepth = wallH * 0.85;
+  const arcDepth   = wallH * 0.85 * 0.34; // preserves original 0.022/0.065 ratio
+  const inactiveOpacity = 0.35;
+  const panelOpacity = isActive ? 1 : inactiveOpacity;
+  const arcOpacity   = isActive ? 0.38 : Math.min(0.38, inactiveOpacity);
 
   const { panelGeo, arcGeo } = useMemo(() => {
     const panel = new THREE.Shape();
@@ -274,26 +273,33 @@ function DoorSymbol3D({ x, z }: { x: number; z: number }) {
     arc.closePath();
 
     return {
-      panelGeo: new THREE.ExtrudeGeometry(panel, EX_DOOR_PANEL),
-      arcGeo:   new THREE.ExtrudeGeometry(arc,   EX_DOOR_ARC),
+      panelGeo: new THREE.ExtrudeGeometry(panel, { depth: panelDepth, bevelEnabled: false }),
+      arcGeo:   new THREE.ExtrudeGeometry(arc,   { depth: arcDepth,   bevelEnabled: false }),
     };
-  }, []);
+  }, [panelDepth, arcDepth]);
 
   return (
     <group position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh geometry={panelGeo}>
-        <meshLambertMaterial color="#5E8A7C" />
+        <meshLambertMaterial color="#5E8A7C" transparent={!isActive} opacity={panelOpacity} />
       </mesh>
       <mesh geometry={arcGeo}>
-        <meshLambertMaterial color="#5E8A7C" transparent opacity={0.38} />
+        <meshLambertMaterial color="#5E8A7C" transparent opacity={arcOpacity} />
       </mesh>
     </group>
   );
 }
 
 // Window — extruded outer frame + center divider slab
-function WindowSymbol3D({ x, z }: { x: number; z: number }) {
+function WindowSymbol3D({ x, z, wallH, isActive }: { x: number; z: number; wallH: number; isActive: boolean }) {
   const w = 0.24, h = 0.07, ft = 0.013, lt = 0.010;
+  const frameDepth = wallH * 0.85;
+  const paneDepth  = wallH * 0.85 * 0.24; // preserves original 0.012/0.050 ratio
+  const inactiveOpacity = 0.35;
+  const frameOpacity = isActive ? 1 : inactiveOpacity;
+  const divOpacity   = isActive ? 0.72 : Math.min(0.72, inactiveOpacity);
+  const glassBaseOpacity = WINDOW_GLASS_MATERIAL.opacity ?? 1;
+  const glassOpacity = isActive ? glassBaseOpacity : Math.min(glassBaseOpacity, inactiveOpacity);
 
   const { frameGeo, divGeo, paneGeo } = useMemo(() => {
     const frame = new THREE.Shape();
@@ -319,41 +325,48 @@ function WindowSymbol3D({ x, z }: { x: number; z: number }) {
     pane.closePath();
 
     return {
-      frameGeo: new THREE.ExtrudeGeometry(frame, EX_WINDOW),
-      divGeo:   new THREE.ExtrudeGeometry(div,   EX_WINDOW),
-      paneGeo:  new THREE.ExtrudeGeometry(pane,  EX_WINDOW_PANE),
+      frameGeo: new THREE.ExtrudeGeometry(frame, { depth: frameDepth, bevelEnabled: false }),
+      divGeo:   new THREE.ExtrudeGeometry(div,   { depth: frameDepth, bevelEnabled: false }),
+      paneGeo:  new THREE.ExtrudeGeometry(pane,  { depth: paneDepth,  bevelEnabled: false }),
     };
-  }, []);
+  }, [frameDepth, paneDepth]);
 
   return (
     <group position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh geometry={frameGeo}>
-        <meshLambertMaterial color="#7A9EB5" />
+        <meshLambertMaterial color="#7A9EB5" transparent={!isActive} opacity={frameOpacity} />
       </mesh>
       <mesh geometry={paneGeo}>
-        <meshPhysicalMaterial {...WINDOW_GLASS_MATERIAL} />
+        <meshPhysicalMaterial {...WINDOW_GLASS_MATERIAL} transparent opacity={glassOpacity} />
       </mesh>
       <mesh geometry={divGeo}>
-        <meshLambertMaterial color="#90A8B1" transparent opacity={0.72} />
+        <meshLambertMaterial color="#90A8B1" transparent opacity={divOpacity} />
       </mesh>
     </group>
   );
 }
 
 // Stair — three actual 3D steps at increasing Y heights and Z offsets
-function StairSymbol3D({ x, z }: { x: number; z: number }) {
+function StairSymbol3D({ x, z, wallH, isActive }: { x: number; z: number; wallH: number; isActive: boolean }) {
+  const tall  = wallH;
+  const mid   = wallH * (0.090 / 0.150);
+  const low   = wallH * (0.040 / 0.150);
+  const zStep = wallH * (0.065 / 0.150);
+  const inactiveOpacity = 0.35;
+  const meshOpacity = isActive ? 1 : inactiveOpacity;
+
   const STEPS = [
-    { h: 0.040, yCenter: 0.020, zOff: -0.065 },
-    { h: 0.090, yCenter: 0.045, zOff:  0.000 },
-    { h: 0.150, yCenter: 0.075, zOff:  0.065 },
-  ] as const;
+    { h: low,  yCenter: low / 2,   zOff: -zStep },
+    { h: mid,  yCenter: mid / 2,   zOff:  0     },
+    { h: tall, yCenter: tall / 2,  zOff:  zStep },
+  ];
 
   return (
     <group position={[x, 0, z]}>
       {STEPS.map((s, i) => (
         <mesh key={i} position={[0, s.yCenter, s.zOff]}>
-          <boxGeometry args={[0.17, s.h, 0.065]} />
-          <meshLambertMaterial color="#9A9578" />
+          <boxGeometry args={[0.17, s.h, zStep]} />
+          <meshLambertMaterial color="#9A9578" transparent={!isActive} opacity={meshOpacity} />
         </mesh>
       ))}
     </group>
@@ -361,8 +374,11 @@ function StairSymbol3D({ x, z }: { x: number; z: number }) {
 }
 
 // Elevator — extruded square frame + up/down arrow triangles
-function ElevatorSymbol3D({ x, z }: { x: number; z: number }) {
+function ElevatorSymbol3D({ x, z, wallH, isActive }: { x: number; z: number; wallH: number; isActive: boolean }) {
   const s = 0.19, ft = 0.013, at = 0.040;
+  const elevDepth = wallH;
+  const inactiveOpacity = 0.35;
+  const meshOpacity = isActive ? 1 : inactiveOpacity;
 
   const { frameGeo, upGeo, downGeo } = useMemo(() => {
     const frame = new THREE.Shape();
@@ -384,28 +400,36 @@ function ElevatorSymbol3D({ x, z }: { x: number; z: number }) {
     downArrow.closePath();
 
     return {
-      frameGeo: new THREE.ExtrudeGeometry(frame,     EX_ELEV),
-      upGeo:    new THREE.ExtrudeGeometry(upArrow,   EX_ELEV),
-      downGeo:  new THREE.ExtrudeGeometry(downArrow, EX_ELEV),
+      frameGeo: new THREE.ExtrudeGeometry(frame,     { depth: elevDepth, bevelEnabled: false }),
+      upGeo:    new THREE.ExtrudeGeometry(upArrow,   { depth: elevDepth, bevelEnabled: false }),
+      downGeo:  new THREE.ExtrudeGeometry(downArrow, { depth: elevDepth, bevelEnabled: false }),
     };
-  }, []);
+  }, [elevDepth]);
 
   return (
     <group position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <mesh geometry={frameGeo}><meshLambertMaterial color="#8A8A8A" /></mesh>
-      <mesh geometry={upGeo}>  <meshLambertMaterial color="#8A8A8A" /></mesh>
-      <mesh geometry={downGeo}><meshLambertMaterial color="#8A8A8A" /></mesh>
+      <mesh geometry={frameGeo}><meshLambertMaterial color="#8A8A8A" transparent={!isActive} opacity={meshOpacity} /></mesh>
+      <mesh geometry={upGeo}>  <meshLambertMaterial color="#8A8A8A" transparent={!isActive} opacity={meshOpacity} /></mesh>
+      <mesh geometry={downGeo}><meshLambertMaterial color="#8A8A8A" transparent={!isActive} opacity={meshOpacity} /></mesh>
     </group>
   );
 }
 
-function OpeningMarker({ opening }: { opening: RoomOpening }) {
+function OpeningMarker({
+  opening,
+  wallH,
+  isActive,
+}: {
+  opening: RoomOpening;
+  wallH: number;
+  isActive: boolean;
+}) {
   const x = opening.x / 100;
   const z = opening.y / 100;
-  if (opening.type === "door")    return <DoorSymbol3D     x={x} z={z} />;
-  if (opening.type === "window")  return <WindowSymbol3D   x={x} z={z} />;
-  if (opening.type === "stair")   return <StairSymbol3D    x={x} z={z} />;
-  return                                 <ElevatorSymbol3D x={x} z={z} />;
+  if (opening.type === "door")    return <DoorSymbol3D     x={x} z={z} wallH={wallH} isActive={isActive} />;
+  if (opening.type === "window")  return <WindowSymbol3D   x={x} z={z} wallH={wallH} isActive={isActive} />;
+  if (opening.type === "stair")   return <StairSymbol3D    x={x} z={z} wallH={wallH} isActive={isActive} />;
+  return                                 <ElevatorSymbol3D x={x} z={z} wallH={wallH} isActive={isActive} />;
 }
 
 // ── RoomMesh — walls as per-edge boxes, no ceiling ───────────────────────────
@@ -419,6 +443,7 @@ interface RoomMeshProps {
   floorPerimeterInset: number;
   color:    string;
   label:    string;
+  isActive: boolean;
 }
 
 function RoomMesh({
@@ -431,6 +456,7 @@ function RoomMesh({
   floorPerimeterInset,
   color,
   label,
+  isActive,
 }: RoomMeshProps) {
   const surfaceLayout = useMemo(
     () =>
@@ -469,6 +495,11 @@ function RoomMesh({
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
 
+  // AC-3: inactive floor opacity values
+  const inactiveOpacity = 0.35;
+  const meshOpacity = isActive ? 1 : inactiveOpacity;
+  const meshTransparent = !isActive;
+
   return (
     <group position={[0, floorRenderY, 0]}>
       {/* Wall assembly — softened segments and corners, no ceiling */}
@@ -479,7 +510,11 @@ function RoomMesh({
           position={wallMesh.position}
           rotation={wallMesh.rotation}
         >
-          <meshStandardMaterial {...INTERIOR_WALL_SHADING} />
+          <meshStandardMaterial
+            {...INTERIOR_WALL_SHADING}
+            transparent={meshTransparent}
+            opacity={meshOpacity}
+          />
         </mesh>
       ))}
 
@@ -495,7 +530,12 @@ function RoomMesh({
             },
           ]}
         />
-        <meshLambertMaterial color={color} side={THREE.DoubleSide} />
+        <meshLambertMaterial
+          color={color}
+          side={THREE.DoubleSide}
+          transparent={meshTransparent}
+          opacity={meshOpacity}
+        />
       </mesh>
 
       {/* Room label — floats above wall tops */}
@@ -520,7 +560,7 @@ function RoomMesh({
 
       {/* Opening markers */}
       {openings.map(op => (
-        <OpeningMarker key={op.id} opening={op} />
+        <OpeningMarker key={op.id} opening={op} wallH={wallH} isActive={isActive} />
       ))}
     </group>
   );
@@ -682,6 +722,7 @@ interface Props {
   floors: EditorFloor[];
   activeFloorId: string | null;
   exteriorPolygon?: EditorPoint[] | null;
+  exteriorEdgeOpenings?: RoomOpening[];
   floorBaseOffset?: number;
   wallBaseOffset?: number;
   floorPerimeterInset?: number;
@@ -691,6 +732,7 @@ export default function Viewer25D({
   floors,
   activeFloorId,
   exteriorPolygon,
+  exteriorEdgeOpenings,
   floorBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.floorBaseOffset,
   wallBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.wallBaseOffset,
   floorPerimeterInset = resolveFloorPerimeterInset({
@@ -797,8 +839,17 @@ export default function Viewer25D({
             {exteriorPolygon && exteriorPolygon.length >= 3 && (
               <ExteriorWall points={exteriorPolygon} totalHeight={totalHeight} />
             )}
-            {floorData.map(({ floor, y, colorIndex }) =>
-              floor.rooms.map(room => (
+            {totalHeight > 0 && (exteriorEdgeOpenings ?? []).map(op => (
+              <OpeningMarker
+                key={op.id}
+                opening={op}
+                wallH={resolveViewer25DFloorExtrusionDepth(totalHeight, WALL_HEIGHT_SCALE)}
+                isActive={true}
+              />
+            ))}
+            {floorData.map(({ floor, y, colorIndex }) => {
+              const isActive = activeFloorId === null || floor.floorId === activeFloorId;
+              return floor.rooms.map(room => (
                 <RoomMesh
                   key={room.roomId}
                   points={room.roomPolygon}
@@ -810,9 +861,10 @@ export default function Viewer25D({
                   floorPerimeterInset={floorPerimeterInset}
                   color={FLOOR_COLORS[colorIndex % FLOOR_COLORS.length]}
                   label={room.roomName}
+                  isActive={isActive}
                 />
-              ))
-            )}
+              ));
+            })}
           </group>
         </Suspense>
 
