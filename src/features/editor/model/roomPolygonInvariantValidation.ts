@@ -1,7 +1,9 @@
 import {
-  validateRoomPolygonForOperation,
-  type Point2D,
-  type RoomPolygonOperationValidationResult,
+  validateAcceptedRoomPolygon,
+} from './roomPolygonAcceptance.ts';
+import type {
+  Point2D,
+  RoomPolygonOperationValidationResult,
 } from './roomPolygonValidation.ts';
 
 export type RoomPolygonVertexEditInvariantResult =
@@ -10,4 +12,4 @@ export type RoomPolygonVertexEditInvariantResult =
 export const validateRoomPolygonVertexEditInvariant = (
   points: readonly Point2D[],
 ): RoomPolygonVertexEditInvariantResult =>
-  validateRoomPolygonForOperation(points);
+  validateAcceptedRoomPolygon(points);

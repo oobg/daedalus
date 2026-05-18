@@ -1,8 +1,9 @@
+import { acceptRoomPolygon } from './roomPolygonAcceptance.ts';
+import { normalizeRoomPolygonPoints } from './roomPolygonNormalization.ts';
 import {
-  normalizeRoomPolygonInput,
-  normalizeRoomPolygonPoints,
-} from './roomPolygonNormalization.ts';
-import { type RoomPolygonValidationFailure } from './roomPolygonValidation.ts';
+  getRoomPolygonValidationMessage,
+  type RoomPolygonValidationFailure,
+} from './roomPolygonValidation.ts';
 import { createRoomObjectFromClosedPolygon } from './roomObjectInstantiation.ts';
 import {
   insertRoomPolygonVertexWithInvariantValidation,
@@ -111,31 +112,15 @@ export const createRoomPolygonFromOrderedPoints = (
 export const finalizeRoomDraftPolygon = (
   draft: RoomDraftPolygon,
 ): RoomPolygon => {
-  const normalized = normalizeRoomPolygonInput(draft.points);
+  const accepted = acceptRoomPolygon(draft.points);
 
-  if (!normalized.ok) {
-    if (normalized.error === 'polygon_requires_three_points') {
-      throw new Error('A room polygon requires at least 3 points.');
-    }
-
-    if (normalized.error === 'polygon_requires_three_distinct_vertices') {
-      throw new Error('A room polygon requires at least 3 distinct vertices.');
-    }
-
-    if (normalized.error === 'polygon_points_must_be_finite') {
-      throw new Error('A room polygon point must use finite x/y coordinates.');
-    }
-
-    if (normalized.error === 'polygon_self_intersects') {
-      throw new Error('A room polygon must not self-intersect.');
-    }
-
-    throw new Error('A room polygon must define a valid simple closed shape.');
+  if (!accepted.ok) {
+    throw new Error(getRoomPolygonValidationMessage(accepted.validation.code));
   }
 
   return {
     roomId: draft.roomId,
-    points: normalized.points,
+    points: accepted.points,
   };
 };
 
