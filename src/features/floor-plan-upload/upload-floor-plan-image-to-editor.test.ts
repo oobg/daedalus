@@ -14,12 +14,14 @@ import { uploadFloorPlanImageToEditor } from "./upload-floor-plan-image-to-edito
 
 class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
   private readonly entries = new Map<string, string>();
+  public writeCount = 0;
 
   getItem(key: string): string | null {
     return this.entries.get(key) ?? null;
   }
 
   setItem(key: string, value: string): void {
+    this.writeCount += 1;
     this.entries.set(key, value);
   }
 }
@@ -81,4 +83,58 @@ test("uploadFloorPlanImageToEditor validates, persists, and associates the uploa
     loadStoredFloorPlanImage(result.persistedUpload.assetRef, storage),
     result.persistedUpload,
   );
+});
+
+test("uploadFloorPlanImageToEditor rejects invalid uploads without persisting or changing floor reference metadata", async () => {
+  const project = createProject();
+  const storage = new InMemoryFloorPlanImageStorage();
+  const upload = new File(["not-a-real-image"], "level-2.png", {
+    type: "image/png",
+  });
+
+  await assert.rejects(
+    uploadFloorPlanImageToEditor(
+      {
+        project,
+        selectedFloorId: project.viewState.activeFloorId,
+        upload,
+      },
+      storage,
+    ),
+    /invalid_image_content/,
+  );
+
+  assert.equal(storage.writeCount, 0);
+  assert.equal(
+    project.floors[0].referenceImage,
+    "floor-plan://project-upload-flow/floor-1/existing.png",
+  );
+  assert.equal(project.floors[1].referenceImage, null);
+});
+
+test("uploadFloorPlanImageToEditor rejects non-accepted file types without persisting or changing floor reference metadata", async () => {
+  const project = createProject();
+  const storage = new InMemoryFloorPlanImageStorage();
+  const upload = new File(["<svg></svg>"], "level-2.svg", {
+    type: "image/svg+xml",
+  });
+
+  await assert.rejects(
+    uploadFloorPlanImageToEditor(
+      {
+        project,
+        selectedFloorId: project.viewState.activeFloorId,
+        upload,
+      },
+      storage,
+    ),
+    /unsupported_type/,
+  );
+
+  assert.equal(storage.writeCount, 0);
+  assert.equal(
+    project.floors[0].referenceImage,
+    "floor-plan://project-upload-flow/floor-1/existing.png",
+  );
+  assert.equal(project.floors[1].referenceImage, null);
 });

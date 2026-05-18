@@ -14,7 +14,6 @@ import type {
 import {
   DEFAULT_FLOOR_HEIGHT,
   addEditorFloor,
-  addEditorRoom,
   createEditorProject,
   createEditorState,
   removeEditorFloor,
@@ -24,9 +23,8 @@ import {
   updateEditorRoom,
 } from "../domain/editor-state.ts";
 import {
-  collectRoomDraftPoints,
-  finalizeEditorRoomDraft,
-} from "../features/editor/model/roomDraft.ts";
+  persistCompletedRoomPolygon,
+} from "../features/editor/model/roomPolygonCompletionPersistence.ts";
 import {
   applyValidatedFloorHeightChange,
   applyValidatedSelectedFloorHeightChange,
@@ -309,17 +307,20 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
           .length ?? 0;
       const roomId = nanoid();
       const roomName = `Room ${roomCount + 1}`;
-      const roomDraft = collectRoomDraftPoints(roomId, draftPoints);
-      let roomInput: ReturnType<typeof finalizeEditorRoomDraft>;
+      const persistedRoom = persistCompletedRoomPolygon({
+        project,
+        floorId: activeFloorId,
+        roomId,
+        roomName,
+        orderedVertices: draftPoints,
+      });
 
-      try {
-        roomInput = finalizeEditorRoomDraft(roomDraft, roomName);
-      } catch {
+      if (!persistedRoom.ok) {
         return;
       }
 
       set({
-        project: addEditorRoom(project, activeFloorId, roomInput),
+        project: persistedRoom.project,
         isDrawing: false,
         draftPoints: [],
       });

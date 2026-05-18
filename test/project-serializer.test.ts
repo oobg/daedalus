@@ -669,6 +669,57 @@ test("serializeProjectForExport produces a plain JSON payload that round-trips c
   assert.deepEqual(JSON.parse(JSON.stringify(serialized)), serialized);
 });
 
+test("serializeProjectForExport writes each floor height under the matching floor identity", () => {
+  const serialized = serializeProjectForExport({
+    projectId: "project-floor-height-identity",
+    projectName: "Floor Height Identity",
+    objectVersion: 3,
+    floors: [
+      {
+        id: "floor-roof",
+        name: "Roof",
+        height: 5.9,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        id: "floor-lobby",
+        name: "Lobby",
+        height: 3.15,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        id: "floor-mezzanine",
+        name: "Mezzanine",
+        height: 4.4,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-lobby",
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      uploadedProjectName: null,
+    },
+  });
+
+  const floorHeightsById = Object.fromEntries(
+    serialized.floors.map((floor) => [floor.floorId, floor.floorHeight]),
+  );
+
+  assert.deepEqual(floorHeightsById, {
+    "floor-roof": 5.9,
+    "floor-lobby": 3.15,
+    "floor-mezzanine": 4.4,
+  });
+  assert.equal(serialized.floors.length, 3);
+});
+
 test("serializeProjectForExport and restoreProjectFromImport preserve each configured floor height", () => {
   const serialized = serializeProjectForExport({
     projectId: "project-height-roundtrip",
