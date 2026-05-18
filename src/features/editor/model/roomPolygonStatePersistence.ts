@@ -5,6 +5,7 @@ import {
   type EditorRoom,
 } from "../../../domain/editor-state.ts";
 import {
+  deleteActiveRoomPolygonEdge,
   deleteActiveRoomPolygonVertex,
   insertActiveRoomPolygonEdgeVertex,
   insertActiveRoomPolygonVertex,
@@ -31,7 +32,10 @@ export type PersistRoomPolygonEditResult =
     }
   | {
       readonly ok: false;
-      readonly error: "invalid_polygon";
+      readonly error:
+        | "invalid_polygon"
+        | "vertex_index_out_of_range"
+        | "edge_index_out_of_range";
     };
 
 export const persistMovedRoomPolygonVertex = (
@@ -75,6 +79,15 @@ export const persistDeletedRoomPolygonVertex = (
 ): PersistRoomPolygonEditResult =>
   persistRoomPolygonEdit(project, context, (room) =>
     deleteActiveRoomPolygonVertex(createPersistenceState(room), vertexIndex),
+  );
+
+export const persistDeletedRoomPolygonEdge = (
+  project: EditorProject,
+  context: RoomPolygonPersistenceContext,
+  edgeIndex: number,
+): PersistRoomPolygonEditResult =>
+  persistRoomPolygonEdit(project, context, (room) =>
+    deleteActiveRoomPolygonEdge(createPersistenceState(room), edgeIndex),
   );
 
 function persistRoomPolygonEdit(

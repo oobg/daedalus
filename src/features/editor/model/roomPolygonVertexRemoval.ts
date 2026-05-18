@@ -23,12 +23,58 @@ export type RoomPolygonVertexRemovalResult =
       readonly validation?: RoomPolygonValidationFailure;
     };
 
+export type RoomPolygonEdgeRemovalResult =
+  | {
+      readonly ok: true;
+      readonly points: Point2D[];
+    }
+  | {
+      readonly ok: false;
+      readonly error: 'edge_index_out_of_range' | 'invalid_polygon';
+      readonly validation?: RoomPolygonValidationFailure;
+    };
+
+const clonePoints = (points: readonly Point2D[]): Point2D[] =>
+  points.map((point) => ({
+    x: point.x,
+    y: point.y,
+  }));
+
+const reopenPoints = (points: readonly Point2D[]): Point2D[] => {
+  if (!isClosedPolygon(points)) {
+    return clonePoints(points);
+  }
+
+  return clonePoints(points.slice(0, -1));
+};
+
+const reclosePoints = (
+  openPoints: readonly Point2D[],
+  wasClosed: boolean,
+): Point2D[] => {
+  if (!wasClosed) {
+    return clonePoints(openPoints);
+  }
+
+  if (openPoints.length === 0) {
+    return [];
+  }
+
+  return [
+    ...clonePoints(openPoints),
+    {
+      x: openPoints[0].x,
+      y: openPoints[0].y,
+    },
+  ];
+};
+
 export const removeRoomPolygonVertexAt = (
   points: readonly Point2D[],
   vertexIndex: number,
 ): Point2D[] | null => {
   const closed = isClosedPolygon(points);
-  const openPoints = closed ? points.slice(0, -1) : points.slice();
+  const openPoints = reopenPoints(points);
 
   if (vertexIndex < 0 || vertexIndex >= openPoints.length) {
     return null;
@@ -36,27 +82,7 @@ export const removeRoomPolygonVertexAt = (
 
   const nextOpenPoints = openPoints.filter((_, index) => index !== vertexIndex);
 
-  if (!closed) {
-    return nextOpenPoints.map((point) => ({
-      x: point.x,
-      y: point.y,
-    }));
-  }
-
-  if (nextOpenPoints.length === 0) {
-    return [];
-  }
-
-  return [
-    ...nextOpenPoints.map((point) => ({
-      x: point.x,
-      y: point.y,
-    })),
-    {
-      x: nextOpenPoints[0].x,
-      y: nextOpenPoints[0].y,
-    },
-  ];
+  return reclosePoints(nextOpenPoints, closed);
 };
 
 export const removeRoomPolygonVertexWithInvariantValidation = (
@@ -69,6 +95,50 @@ export const removeRoomPolygonVertexWithInvariantValidation = (
     return {
       ok: false,
       error: 'vertex_index_out_of_range',
+    };
+  }
+
+  const validation = validateRoomPolygonVertexEditInvariant(nextPoints);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: 'invalid_polygon',
+      validation: validation.validation,
+    };
+  }
+
+  return {
+    ok: true,
+    points: nextPoints,
+  };
+};
+
+export const collapseRoomPolygonEdgeAt = (
+  points: readonly Point2D[],
+  edgeIndex: number,
+): Point2D[] | null => {
+  const openPoints = reopenPoints(points);
+
+  if (edgeIndex < 0 || edgeIndex >= openPoints.length) {
+    return null;
+  }
+
+  const collapseVertexIndex = (edgeIndex + 1) % openPoints.length;
+
+  return removeRoomPolygonVertexAt(points, collapseVertexIndex);
+};
+
+export const collapseRoomPolygonEdgeWithInvariantValidation = (
+  points: readonly Point2D[],
+  edgeIndex: number,
+): RoomPolygonEdgeRemovalResult => {
+  const nextPoints = collapseRoomPolygonEdgeAt(points, edgeIndex);
+
+  if (nextPoints === null) {
+    return {
+      ok: false,
+      error: 'edge_index_out_of_range',
     };
   }
 

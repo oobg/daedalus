@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createEditorProject } from "../../../domain/editor-state.ts";
 import {
+  persistDeletedRoomPolygonEdge,
   persistDeletedRoomPolygonVertex,
   persistInsertedRoomPolygonEdgeVertex,
   persistInsertedRoomPolygonVertex,
@@ -212,5 +213,63 @@ test("room polygon persistence writes edge-based vertex insertion back into edit
     { x: 4, y: 0 },
     { x: 4, y: 3 },
     { x: 0, y: 3 },
+  ]);
+});
+
+test("room polygon persistence writes edge-collapse removal back into editor project state", () => {
+  const project = createEditorProject({
+    projectId: "project-room-polygon-edge-remove-persistence",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Lobby",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 4 },
+              { x: 4, y: 6 },
+              { x: 0, y: 4 },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = persistDeletedRoomPolygonEdge(
+    project,
+    {
+      floorId: "floor-1",
+      roomId: "room-1",
+    },
+    1,
+  );
+
+  assert.equal(result.ok, true);
+
+  if (!result.ok) {
+    return;
+  }
+
+  assert.deepEqual(result.project.floors[0].rooms[0].roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 4, y: 6 },
+    { x: 0, y: 4 },
+  ]);
+  assert.equal(result.project.floors[0].rooms[0].area, 32);
+  assert.deepEqual(result.project.floors[0].rooms[0].labelPosition, {
+    x: 3,
+    y: 2.5,
+  });
+  assert.deepEqual(project.floors[0].rooms[0].roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 6 },
+    { x: 0, y: 4 },
   ]);
 });

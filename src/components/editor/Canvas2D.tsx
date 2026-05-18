@@ -204,6 +204,7 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
   const selectRoom      = useEditorStore(s => s.selectRoom);
   const updateRoom      = useEditorStore(s => s.updateRoom);
   const insertRoomVertexOnEdge = useEditorStore(s => s.insertRoomVertexOnEdge);
+  const removeRoomVertex = useEditorStore(s => s.removeRoomVertex);
   const translateRoom   = useEditorStore(s => s.translateRoom);
   const addOpening      = useEditorStore(s => s.addOpening);
 
@@ -544,14 +545,10 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
   const handleRoomVertexRemove = useCallback((handle: RoomGeometryHandle) => {
     if (!activeFloorId || !selectedRoom) return;
 
-    const nextPolygon = removeRoomGeometryHandleVertex(selectedRoom, handle);
+    if (removeRoomGeometryHandleVertex(selectedRoom, handle) === null) return;
 
-    if (nextPolygon === null) return;
-
-    updateRoom(activeFloorId, selectedRoom.roomId, {
-      roomPolygon: nextPolygon,
-    });
-  }, [activeFloorId, selectedRoom, updateRoom]);
+    removeRoomVertex(activeFloorId, selectedRoom.roomId, handle.vertexIndex);
+  }, [activeFloorId, removeRoomVertex, selectedRoom]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Shift")  setShiftHeld(true);

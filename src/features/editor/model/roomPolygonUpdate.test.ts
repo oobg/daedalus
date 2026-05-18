@@ -8,6 +8,7 @@ import {
 } from './roomDraft.ts';
 import {
   createRoomPolygon,
+  deleteActiveRoomPolygonEdge,
   deleteActiveRoomPolygonVertex,
   insertActiveRoomPolygonEdgeVertex,
   insertActiveRoomPolygonVertex,
@@ -387,6 +388,56 @@ test('deleteActiveRoomPolygonVertex removes the active-room vertex and returns t
   assert.deepEqual(result.room.labelPosition, {
     x: 5,
     y: 3.5,
+  });
+});
+
+test('deleteActiveRoomPolygonEdge collapses the targeted active-room edge and recalculates derived metadata', () => {
+  const polygon = finalizeRoomDraftPolygon(
+    collectRoomDraftPoints('room-a', [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 4 },
+      { x: 4, y: 6 },
+      { x: 0, y: 4 },
+    ]),
+  );
+  const room: TestRoom = {
+    id: 'room-a',
+    name: 'Lobby',
+    polygon,
+    area: 40,
+    labelPosition: { x: 4, y: 2.8 },
+  };
+  const state: RoomPolygonUpdateState<TestRoom> = {
+    rooms: [room],
+    activeRoomId: 'room-a',
+  };
+
+  const result = deleteActiveRoomPolygonEdge(state, 1);
+
+  assert.equal(result.ok, true);
+
+  if (!result.ok) {
+    return;
+  }
+
+  assert.deepEqual(result.geometry, {
+    ok: true,
+    polygon: {
+      roomId: 'room-a',
+      points: [
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+        { x: 4, y: 6 },
+        { x: 0, y: 4 },
+        { x: 0, y: 0 },
+      ],
+    },
+  });
+  assert.equal(result.room.area, 32);
+  assert.deepEqual(result.room.labelPosition, {
+    x: 3,
+    y: 2.5,
   });
 });
 

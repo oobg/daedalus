@@ -29,7 +29,11 @@ import {
   applyValidatedFloorHeightChange,
   applyValidatedSelectedFloorHeightChange,
 } from "../features/editor/model/floorHeightEditing.ts";
-import { persistInsertedRoomPolygonEdgeVertex } from "../features/editor/model/roomPolygonStatePersistence.ts";
+import {
+  persistDeletedRoomPolygonEdge,
+  persistDeletedRoomPolygonVertex,
+  persistInsertedRoomPolygonEdgeVertex,
+} from "../features/editor/model/roomPolygonStatePersistence.ts";
 import { translateRoomGeometrySource } from "../features/editor/model/roomGeometryHandles.ts";
 import { collectRoomOutlinePoint } from "../features/editor/model/roomOutlinePointCollection.ts";
 import { buildFloorGuideSvgExport } from "../features/project-export/floor-guide-svg-export.ts";
@@ -98,6 +102,16 @@ export interface EditorStoreState {
     roomId: string,
     edgeIndex: number,
     point: EditorPoint,
+  ) => void;
+  removeRoomVertex: (
+    floorId: string,
+    roomId: string,
+    vertexIndex: number,
+  ) => void;
+  collapseRoomEdge: (
+    floorId: string,
+    roomId: string,
+    edgeIndex: number,
   ) => void;
   translateRoom: (floorId: string, roomId: string, delta: EditorPoint) => void;
   removeRoom: (floorId: string, roomId: string) => void;
@@ -355,6 +369,42 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
         },
         edgeIndex,
         point,
+      );
+
+      if (!result.ok) {
+        return;
+      }
+
+      set({ project: result.project });
+      get().saveToLocalStorage();
+    },
+
+    removeRoomVertex: (floorId, roomId, vertexIndex) => {
+      const result = persistDeletedRoomPolygonVertex(
+        get().project,
+        {
+          floorId,
+          roomId,
+        },
+        vertexIndex,
+      );
+
+      if (!result.ok) {
+        return;
+      }
+
+      set({ project: result.project });
+      get().saveToLocalStorage();
+    },
+
+    collapseRoomEdge: (floorId, roomId, edgeIndex) => {
+      const result = persistDeletedRoomPolygonEdge(
+        get().project,
+        {
+          floorId,
+          roomId,
+        },
+        edgeIndex,
       );
 
       if (!result.ok) {

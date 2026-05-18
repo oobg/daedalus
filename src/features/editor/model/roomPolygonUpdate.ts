@@ -1,5 +1,6 @@
 import {
   collectRoomDraftPoints,
+  deleteRoomPolygonEdge,
   deleteRoomPolygonVertex,
   finalizeRoomDraftPolygon,
   insertRoomPolygonVertex,
@@ -7,6 +8,7 @@ import {
   moveRoomPolygonEdge,
   moveRoomPolygonVertex,
   type DeleteRoomPolygonVertexResult,
+  type DeleteRoomPolygonEdgeResult,
   type DraftPoint,
   type InsertRoomPolygonEdgeVertexResult,
   type InsertRoomPolygonVertexResult,
@@ -156,7 +158,8 @@ const editActiveRoomPolygon = <
     | MoveRoomPolygonVertexResult
     | InsertRoomPolygonEdgeVertexResult
     | InsertRoomPolygonVertexResult
-    | DeleteRoomPolygonVertexResult,
+    | DeleteRoomPolygonVertexResult
+    | DeleteRoomPolygonEdgeResult,
 >(
   state: RoomPolygonUpdateState<Room>,
   mutate: (polygon: RoomPolygon) => GeometryResult,
@@ -247,4 +250,14 @@ export const deleteActiveRoomPolygonVertex = <
 ): EditActiveRoomPolygonResult<Room, DeleteRoomPolygonVertexResult> =>
   editActiveRoomPolygon(state, (polygon) =>
     deleteRoomPolygonVertex(polygon, vertexIndex),
+  );
+
+export const deleteActiveRoomPolygonEdge = <
+  Room extends RoomPolygonEditorRoom,
+>(
+  state: RoomPolygonUpdateState<Room>,
+  edgeIndex: number,
+): EditActiveRoomPolygonResult<Room, DeleteRoomPolygonEdgeResult> =>
+  editActiveRoomPolygon(state, (polygon) =>
+    deleteRoomPolygonEdge(polygon, edgeIndex),
   );

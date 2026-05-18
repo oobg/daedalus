@@ -402,6 +402,98 @@ test("insertRoomVertexOnEdge persists an inserted edge vertex as room polygon so
   });
 });
 
+test("removeRoomVertex persists a removed vertex as room polygon source data", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const activeFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 90, y: 20 });
+  store.getState().addDraftPoint({ x: 90, y: 100 });
+  store.getState().addDraftPoint({ x: 50, y: 120 });
+  store.getState().addDraftPoint({ x: 10, y: 100 });
+  store.getState().commitDraft();
+
+  const createdRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(createdRoom);
+
+  store.getState().removeRoomVertex(activeFloorId, createdRoom.roomId, 2);
+
+  const updatedRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(updatedRoom);
+  assert.deepEqual(updatedRoom.roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 50, y: 120 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(updatedRoom.area, 5600);
+  assert.deepEqual(updatedRoom.labelPosition, {
+    x: 40,
+    y: 65,
+  });
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 50, y: 120 },
+    { x: 10, y: 100 },
+  ]);
+});
+
+test("collapseRoomEdge persists a collapsed edge as room polygon source data", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const activeFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 90, y: 20 });
+  store.getState().addDraftPoint({ x: 90, y: 100 });
+  store.getState().addDraftPoint({ x: 50, y: 120 });
+  store.getState().addDraftPoint({ x: 10, y: 100 });
+  store.getState().commitDraft();
+
+  const createdRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(createdRoom);
+
+  store.getState().collapseRoomEdge(activeFloorId, createdRoom.roomId, 1);
+
+  const updatedRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(updatedRoom);
+  assert.deepEqual(updatedRoom.roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 50, y: 120 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(updatedRoom.area, 5600);
+  assert.deepEqual(updatedRoom.labelPosition, {
+    x: 40,
+    y: 65,
+  });
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 50, y: 120 },
+    { x: 10, y: 100 },
+  ]);
+});
+
 test("replaceProject normalizes closed room polygons and recalculates derived room data", () => {
   const storage = new MemoryStorage();
   const store = createEditorStore({ storage });

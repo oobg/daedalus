@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  collapseRoomPolygonEdgeAt,
+  collapseRoomPolygonEdgeWithInvariantValidation,
   removeRoomPolygonVertexAt,
   removeRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexRemoval.ts';
@@ -102,5 +104,67 @@ test('removeRoomPolygonVertexWithInvariantValidation rejects out-of-range vertex
   assert.deepEqual(result, {
     ok: false,
     error: 'vertex_index_out_of_range',
+  });
+});
+
+test('collapseRoomPolygonEdgeAt removes the trailing vertex of the targeted edge and preserves closure', () => {
+  const polygon = [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 6 },
+    { x: 0, y: 4 },
+    { x: 0, y: 0 },
+  ] as const;
+
+  const result = collapseRoomPolygonEdgeAt(polygon, 1);
+
+  assert.deepEqual(result, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 4, y: 6 },
+    { x: 0, y: 4 },
+    { x: 0, y: 0 },
+  ]);
+});
+
+test('collapseRoomPolygonEdgeWithInvariantValidation returns the reduced polygon for a valid edge collapse', () => {
+  const polygon = [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 4, y: 6 },
+    { x: 0, y: 4 },
+    { x: 0, y: 0 },
+  ] as const;
+
+  const result = collapseRoomPolygonEdgeWithInvariantValidation(polygon, 1);
+
+  assert.deepEqual(result, {
+    ok: true,
+    points: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 4, y: 6 },
+      { x: 0, y: 4 },
+      { x: 0, y: 0 },
+    ],
+  });
+});
+
+test('collapseRoomPolygonEdgeWithInvariantValidation rejects out-of-range edge indexes', () => {
+  const polygon = [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
+    { x: 0, y: 0 },
+  ] as const;
+
+  const result = collapseRoomPolygonEdgeWithInvariantValidation(polygon, 4);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'edge_index_out_of_range',
   });
 });

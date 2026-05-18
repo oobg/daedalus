@@ -14,6 +14,7 @@ import {
   moveRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexMovement.ts';
 import {
+  collapseRoomPolygonEdgeWithInvariantValidation,
   removeRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexRemoval.ts';
 
@@ -71,6 +72,13 @@ export interface DeleteRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
   readonly error?: 'vertex_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
+}
+
+export interface DeleteRoomPolygonEdgeResult {
+  readonly ok: boolean;
+  readonly polygon?: RoomPolygon;
+  readonly error?: 'edge_index_out_of_range' | 'invalid_polygon';
   readonly validation?: RoomPolygonValidationFailure;
 }
 
@@ -282,6 +290,30 @@ export const deleteRoomPolygonVertex = (
   const removal = removeRoomPolygonVertexWithInvariantValidation(
     polygon.points,
     vertexIndex,
+  );
+
+  if (!removal.ok) {
+    return {
+      ...removal,
+    };
+  }
+
+  return {
+    ok: true,
+    polygon: {
+      ...polygon,
+      points: normalizeRoomPolygonPoints(removal.points),
+    },
+  };
+};
+
+export const deleteRoomPolygonEdge = (
+  polygon: RoomPolygon,
+  edgeIndex: number,
+): DeleteRoomPolygonEdgeResult => {
+  const removal = collapseRoomPolygonEdgeWithInvariantValidation(
+    polygon.points,
+    edgeIndex,
   );
 
   if (!removal.ok) {
