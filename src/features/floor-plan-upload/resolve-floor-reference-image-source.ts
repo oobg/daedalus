@@ -10,43 +10,86 @@ export interface ResolveFloorReferenceImageSourceInput {
   selectedFloorId: string | null;
 }
 
+export type FloorReferenceImageSourceResult =
+  | {
+      ok: true;
+      floorId: string;
+      source: string;
+    }
+  | {
+      ok: false;
+      floorId: string | null;
+      code: "floor_not_found" | "reference_image_not_found";
+    };
+
 export function resolveFloorReferenceImageSource(
   input: ResolveFloorReferenceImageSourceInput,
   storage: FloorPlanImageStorage,
 ): string | null {
-  const referenceImage = resolveFloorReferenceImageAssetRef(input);
+  const result = loadFloorReferenceImageSource(input, storage);
 
-  if (referenceImage == null || referenceImage.trim() === "") {
-    return null;
-  }
-
-  if (isInlineImageSource(referenceImage)) {
-    return referenceImage;
-  }
-
-  const asset = loadStoredFloorPlanImage(referenceImage, storage);
-
-  if (asset == null) {
-    return null;
-  }
-
-  return createFloorPlanImageDataUrl(asset);
+  return result.ok ? result.source : null;
 }
 
-function isInlineImageSource(value: string): boolean {
-  return value.startsWith("data:image/") || value.startsWith("blob:");
-}
-
-function resolveFloorReferenceImageAssetRef(
+export function loadFloorReferenceImageSource(
   input: ResolveFloorReferenceImageSourceInput,
-): string | null {
+  storage: FloorPlanImageStorage,
+): FloorReferenceImageSourceResult {
   if (input.selectedFloorId == null) {
-    return null;
+    return {
+      ok: false,
+      floorId: null,
+      code: "floor_not_found",
+    };
   }
 
   const floor = input.floors.find(
     ({ floorId }) => floorId === input.selectedFloorId,
   );
 
-  return floor?.referenceImage ?? null;
+  if (floor == null) {
+    return {
+      ok: false,
+      floorId: input.selectedFloorId,
+      code: "floor_not_found",
+    };
+  }
+
+  const referenceImage = floor.referenceImage;
+
+  if (referenceImage == null || referenceImage.trim() === "") {
+    return {
+      ok: false,
+      floorId: input.selectedFloorId,
+      code: "reference_image_not_found",
+    };
+  }
+
+  if (isInlineImageSource(referenceImage)) {
+    return {
+      ok: true,
+      floorId: input.selectedFloorId ?? "",
+      source: referenceImage,
+    };
+  }
+
+  const asset = loadStoredFloorPlanImage(referenceImage, storage);
+
+  if (asset == null) {
+    return {
+      ok: false,
+      floorId: input.selectedFloorId,
+      code: "reference_image_not_found",
+    };
+  }
+
+  return {
+    ok: true,
+    floorId: input.selectedFloorId ?? "",
+    source: createFloorPlanImageDataUrl(asset),
+  };
+}
+
+function isInlineImageSource(value: string): boolean {
+  return value.startsWith("data:image/") || value.startsWith("blob:");
 }

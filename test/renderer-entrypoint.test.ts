@@ -89,6 +89,63 @@ test("compatible renderer implementations can be swapped without changing the ca
   );
 });
 
+test("renderProjectSnapshot gives export renderers cumulative floor placements from configured lower-floor heights", () => {
+  const project: RendererSnapshotProject = {
+    projectId: "project-export-stack",
+    projectName: "Export Stack Tower",
+    objectVersion: 2,
+    floors: [
+      createMinimalSnapshotFloor("floor-lobby", "Lobby", 2.25),
+      createMinimalSnapshotFloor("floor-office", "Office", 5.5),
+      createMinimalSnapshotFloor("floor-roof", "Roof", 2.75),
+    ],
+    viewState: {
+      activeFloorId: "floor-office",
+      selectedRoomId: null,
+    },
+  };
+  const exportRenderer: RendererPort<
+    Array<{
+      floorId: string;
+      floorHeight: number;
+      verticalOffset: number;
+      renderVerticalOffset: number | null;
+    }>
+  > = {
+    render(scene) {
+      return scene.floors.map((floor) => ({
+        floorId: floor.floorId,
+        floorHeight: floor.floorHeight,
+        verticalOffset: floor.verticalOffset,
+        renderVerticalOffset: floor.renderVerticalOffset ?? null,
+      }));
+    },
+  };
+
+  const result = renderProjectSnapshot(project, exportRenderer);
+
+  assert.deepEqual(result, [
+    {
+      floorId: "floor-lobby",
+      floorHeight: 2.25,
+      verticalOffset: 0,
+      renderVerticalOffset: 0,
+    },
+    {
+      floorId: "floor-office",
+      floorHeight: 5.5,
+      verticalOffset: 2.25,
+      renderVerticalOffset: 0.675,
+    },
+    {
+      floorId: "floor-roof",
+      floorHeight: 2.75,
+      verticalOffset: 7.75,
+      renderVerticalOffset: 2.325,
+    },
+  ]);
+});
+
 function createSnapshotProject(): RendererSnapshotProject {
   return {
     projectId: "project-atlas",
@@ -174,5 +231,35 @@ function createSnapshotProject(): RendererSnapshotProject {
       activeFloorId: "floor-2",
       selectedRoomId: "room-gallery",
     },
+  };
+}
+
+function createMinimalSnapshotFloor(
+  floorId: string,
+  floorName: string,
+  floorHeight: number,
+): RendererSnapshotProject["floors"][number] {
+  return {
+    floorId,
+    floorName,
+    floorHeight,
+    referenceImage: null,
+    rooms: [
+      {
+        roomId: `${floorId}-room`,
+        roomName: `${floorName} Room`,
+        roomPolygon: [
+          { x: 0, y: 0 },
+          { x: 4, y: 0 },
+          { x: 4, y: 3 },
+          { x: 0, y: 3 },
+          { x: 0, y: 0 },
+        ],
+        sharedBoundaries: [],
+        area: 12,
+        labelPosition: { x: 2, y: 1.5 },
+      },
+    ],
+    verticalConnectors: [],
   };
 }

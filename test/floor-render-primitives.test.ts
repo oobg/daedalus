@@ -262,3 +262,91 @@ test("adaptSnapshotFloorToRenderSceneFloor deep-freezes the floor primitive tree
     (renderFloor.rooms[0].polygon[0] as { x: number; y: number }).x = 99;
   }, TypeError);
 });
+
+test("adaptSnapshotFloorToRenderSceneFloor preserves same-floor geometry when only configured height changes", () => {
+  const floor: RendererSnapshotFloor = {
+    floorId: "floor-lab",
+    floorName: "Lab",
+    floorHeight: 3,
+    referenceImage: "floor-plan://lab.png",
+    rooms: [
+      {
+        roomId: "room-lab",
+        roomName: "Lab Room",
+        roomPolygon: [
+          { x: 1, y: 1 },
+          { x: 7, y: 1 },
+          { x: 7, y: 5 },
+          { x: 1, y: 5 },
+          { x: 1, y: 1 },
+        ],
+        sharedBoundaries: [
+          {
+            edgeId: "edge-lab-east",
+            adjacentRoomId: "room-storage",
+            adjacentEdgeId: "edge-storage-west",
+          },
+        ],
+        area: 24,
+        labelPosition: { x: 4, y: 3 },
+        walls: [
+          {
+            edgeId: "edge-lab-east",
+            start: { x: 7, y: 1 },
+            end: { x: 7, y: 5 },
+          },
+        ],
+        openings: [
+          {
+            openingId: "opening-lab-door",
+            openingType: "door",
+            attachedEdgeId: "edge-lab-east",
+            edgeRelativePosition: 0.25,
+          },
+        ],
+      },
+    ],
+    verticalConnectors: [
+      {
+        connectorId: "connector-lab-stair",
+        connectorType: "stair",
+        roomId: "room-lab",
+        targetFloorId: "floor-upper",
+        position: { x: 2, y: 2 },
+      },
+    ],
+  };
+
+  const baseline = adaptSnapshotFloorToRenderSceneFloor(floor, {
+    verticalOffset: 0,
+    renderVerticalOffset: 0,
+    isActive: true,
+  });
+  const tallerFloor = adaptSnapshotFloorToRenderSceneFloor(
+    {
+      ...floor,
+      floorHeight: 4.5,
+    },
+    {
+      verticalOffset: 0,
+      renderVerticalOffset: 0,
+      isActive: true,
+    },
+  );
+
+  assert.deepEqual(
+    {
+      referenceImage: tallerFloor.referenceImage,
+      rooms: tallerFloor.rooms,
+      verticalConnectors: tallerFloor.verticalConnectors,
+    },
+    {
+      referenceImage: baseline.referenceImage,
+      rooms: baseline.rooms,
+      verticalConnectors: baseline.verticalConnectors,
+    },
+  );
+  assert.equal(tallerFloor.floorHeight, 4.5);
+  assert.equal(tallerFloor.renderHeight, 1.35);
+  assert.equal(baseline.renderHeight, 0.9);
+});

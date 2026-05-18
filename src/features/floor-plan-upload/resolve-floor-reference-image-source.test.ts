@@ -6,7 +6,10 @@ import {
   saveAcceptedFloorPlanImage,
   type FloorPlanImageStorage,
 } from "./floor-plan-image-storage.ts";
-import { resolveFloorReferenceImageSource } from "./resolve-floor-reference-image-source.ts";
+import {
+  loadFloorReferenceImageSource,
+  resolveFloorReferenceImageSource,
+} from "./resolve-floor-reference-image-source.ts";
 import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
 
 class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
@@ -52,6 +55,21 @@ test("resolves an uploaded floor plan asset into a canvas-ready image source", a
     ),
     `data:image/png;base64,${asset.contentBase64}`,
   );
+
+  assert.deepEqual(
+    loadFloorReferenceImageSource(
+      {
+        floors,
+        selectedFloorId: "floor-1",
+      },
+      storage,
+    ),
+    {
+      ok: true,
+      floorId: "floor-1",
+      source: `data:image/png;base64,${asset.contentBase64}`,
+    },
+  );
 });
 
 test("keeps legacy inline image sources usable", () => {
@@ -93,6 +111,21 @@ test("returns null when floor state points to a missing uploaded asset", () => {
       new InMemoryFloorPlanImageStorage(),
     ),
     null,
+  );
+
+  assert.deepEqual(
+    loadFloorReferenceImageSource(
+      {
+        floors,
+        selectedFloorId: "floor-1",
+      },
+      new InMemoryFloorPlanImageStorage(),
+    ),
+    {
+      ok: false,
+      floorId: "floor-1",
+      code: "reference_image_not_found",
+    },
   );
 });
 
@@ -154,5 +187,20 @@ test("returns null when the selected floor id is missing from editor floor metad
       new InMemoryFloorPlanImageStorage(),
     ),
     null,
+  );
+
+  assert.deepEqual(
+    loadFloorReferenceImageSource(
+      {
+        floors,
+        selectedFloorId: "missing-floor",
+      },
+      new InMemoryFloorPlanImageStorage(),
+    ),
+    {
+      ok: false,
+      floorId: "missing-floor",
+      code: "floor_not_found",
+    },
   );
 });

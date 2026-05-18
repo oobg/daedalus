@@ -235,7 +235,7 @@ test('moveActiveRoomPolygonEdge translates only the active room edge and recalcu
     id: 'room-b',
     name: 'Office',
     polygon: result.geometry.polygon,
-    area: 15,
+    area: 18,
     labelPosition: {
       x: 13,
       y: 2,

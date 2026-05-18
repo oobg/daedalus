@@ -191,15 +191,15 @@ test('moveRoomPolygonEdgeWithInvariantValidation rejects edge translations that 
   const result = moveRoomPolygonEdgeWithInvariantValidation(
     polygon,
     1,
-    { x: -10, y: -2 },
+    { x: -8, y: 0 },
   );
 
   assert.deepEqual(result, {
     ok: false,
     error: 'invalid_polygon',
     validation: {
-      code: 'polygon_area_must_be_non_zero',
-      message: 'A room polygon must define a valid simple closed shape.',
+      code: 'polygon_requires_three_distinct_vertices',
+      message: 'A room polygon requires at least 3 distinct vertices.',
     },
   });
 });

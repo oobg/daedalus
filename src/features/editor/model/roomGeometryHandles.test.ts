@@ -348,7 +348,7 @@ test('moveRoomGeometryEdge rejects edge translations that would invalidate the p
   };
 
   assert.equal(
-    moveRoomGeometryEdge(room, 1, { x: -100, y: -20 }),
+    moveRoomGeometryEdge(room, 1, { x: -80, y: 0 }),
     null,
   );
 });

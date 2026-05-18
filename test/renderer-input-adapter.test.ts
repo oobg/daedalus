@@ -420,6 +420,112 @@ test("adaptProjectSnapshotToRenderScene derives distinct render-space floor heig
   assert.notEqual(scene.floors[0].renderHeight, scene.floors[1].renderHeight);
 });
 
+test("adaptProjectSnapshotToRenderScene shifts downstream floor placement when a floor height changes without mutating same-floor geometry", () => {
+  const project: RendererSnapshotProject = {
+    projectId: "project-height-regression",
+    projectName: "Height Regression Center",
+    objectVersion: 1,
+    floors: [
+      {
+        floorId: "floor-ground",
+        floorName: "Ground",
+        floorHeight: 3,
+        referenceImage: null,
+        rooms: [
+          {
+            roomId: "room-ground",
+            roomName: "Ground Room",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 5 },
+              { x: 0, y: 5 },
+              { x: 0, y: 0 },
+            ],
+            sharedBoundaries: [],
+            area: 40,
+            labelPosition: { x: 4, y: 2.5 },
+            openings: [
+              {
+                openingId: "opening-ground-door",
+                openingType: "door",
+                attachedEdgeId: "room-ground:edge:1",
+                edgeRelativePosition: 0.4,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        floorId: "floor-upper",
+        floorName: "Upper",
+        floorHeight: 3.5,
+        referenceImage: null,
+        rooms: [
+          {
+            roomId: "room-upper",
+            roomName: "Upper Room",
+            roomPolygon: [
+              { x: 1, y: 1 },
+              { x: 5, y: 1 },
+              { x: 5, y: 4 },
+              { x: 1, y: 4 },
+              { x: 1, y: 1 },
+            ],
+            sharedBoundaries: [],
+            area: 12,
+            labelPosition: { x: 3, y: 2.5 },
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-ground",
+      selectedRoomId: null,
+    },
+  };
+
+  const baseline = adaptProjectSnapshotToRenderScene(project);
+  const updated = adaptProjectSnapshotToRenderScene({
+    ...project,
+    floors: [
+      {
+        ...project.floors[0],
+        floorHeight: 4.5,
+      },
+      project.floors[1],
+    ],
+  });
+
+  assert.deepEqual(
+    {
+      floorId: updated.floors[0].floorId,
+      floorName: updated.floors[0].floorName,
+      referenceImage: updated.floors[0].referenceImage,
+      isActive: updated.floors[0].isActive,
+      rooms: updated.floors[0].rooms,
+      verticalConnectors: updated.floors[0].verticalConnectors,
+    },
+    {
+      floorId: baseline.floors[0].floorId,
+      floorName: baseline.floors[0].floorName,
+      referenceImage: baseline.floors[0].referenceImage,
+      isActive: baseline.floors[0].isActive,
+      rooms: baseline.floors[0].rooms,
+      verticalConnectors: baseline.floors[0].verticalConnectors,
+    },
+  );
+  assert.equal(baseline.floors[0].verticalOffset, 0);
+  assert.equal(updated.floors[0].verticalOffset, 0);
+  assert.equal(baseline.floors[0].renderHeight, 0.9);
+  assert.equal(updated.floors[0].renderHeight, 1.35);
+  assert.equal(baseline.floors[1].verticalOffset, 3);
+  assert.equal(updated.floors[1].verticalOffset, 4.5);
+  assert.equal(baseline.floors[1].renderVerticalOffset, 0.9);
+  assert.equal(updated.floors[1].renderVerticalOffset, 1.35);
+  assert.deepEqual(updated.floors[1].rooms, baseline.floors[1].rooms);
+});
+
 test("adaptProjectSnapshotToRenderScene does not retain mutable references to editor snapshot objects", () => {
   const project: RendererSnapshotProject = {
     projectId: "project-beta",
