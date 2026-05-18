@@ -203,6 +203,7 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
   const commitDraft     = useEditorStore(s => s.commitDraft);
   const selectRoom      = useEditorStore(s => s.selectRoom);
   const updateRoom      = useEditorStore(s => s.updateRoom);
+  const insertRoomVertexOnEdge = useEditorStore(s => s.insertRoomVertexOnEdge);
   const translateRoom   = useEditorStore(s => s.translateRoom);
   const addOpening      = useEditorStore(s => s.addOpening);
 
@@ -532,10 +533,13 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
 
     if (nextPolygon === null) return;
 
-    updateRoom(activeFloorId, selectedRoom.roomId, {
-      roomPolygon: nextPolygon,
-    });
-  }, [activeFloorId, selectedRoom, updateRoom]);
+    insertRoomVertexOnEdge(
+      activeFloorId,
+      selectedRoom.roomId,
+      edgeIndex,
+      nextPolygon[edgeIndex + 1] ?? getEdgeMidpoint(selectedRoom.roomPolygon, edgeIndex),
+    );
+  }, [activeFloorId, insertRoomVertexOnEdge, selectedRoom]);
 
   const handleRoomVertexRemove = useCallback((handle: RoomGeometryHandle) => {
     if (!activeFloorId || !selectedRoom) return;

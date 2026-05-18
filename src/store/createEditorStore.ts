@@ -29,6 +29,7 @@ import {
   applyValidatedFloorHeightChange,
   applyValidatedSelectedFloorHeightChange,
 } from "../features/editor/model/floorHeightEditing.ts";
+import { persistInsertedRoomPolygonEdgeVertex } from "../features/editor/model/roomPolygonStatePersistence.ts";
 import { translateRoomGeometrySource } from "../features/editor/model/roomGeometryHandles.ts";
 import { collectRoomOutlinePoint } from "../features/editor/model/roomOutlinePointCollection.ts";
 import { buildFloorGuideSvgExport } from "../features/project-export/floor-guide-svg-export.ts";
@@ -91,6 +92,12 @@ export interface EditorStoreState {
       sharedBoundaries?: SharedBoundaryRef[];
       openings?: RoomOpening[];
     },
+  ) => void;
+  insertRoomVertexOnEdge: (
+    floorId: string,
+    roomId: string,
+    edgeIndex: number,
+    point: EditorPoint,
   ) => void;
   translateRoom: (floorId: string, roomId: string, delta: EditorPoint) => void;
   removeRoom: (floorId: string, roomId: string) => void;
@@ -336,6 +343,25 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
       const project = updateEditorRoom(get().project, floorId, roomId, input);
 
       set({ project });
+      get().saveToLocalStorage();
+    },
+
+    insertRoomVertexOnEdge: (floorId, roomId, edgeIndex, point) => {
+      const result = persistInsertedRoomPolygonEdgeVertex(
+        get().project,
+        {
+          floorId,
+          roomId,
+        },
+        edgeIndex,
+        point,
+      );
+
+      if (!result.ok) {
+        return;
+      }
+
+      set({ project: result.project });
       get().saveToLocalStorage();
     },
 

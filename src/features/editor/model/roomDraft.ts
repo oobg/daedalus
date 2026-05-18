@@ -60,6 +60,13 @@ export interface InsertRoomPolygonVertexResult {
   readonly validation?: RoomPolygonValidationFailure;
 }
 
+export interface InsertRoomPolygonEdgeVertexResult {
+  readonly ok: boolean;
+  readonly polygon?: RoomPolygon;
+  readonly error?: 'edge_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
+}
+
 export interface DeleteRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
@@ -226,6 +233,36 @@ export const insertRoomPolygonVertex = (
   if (!insertion.ok) {
     return {
       ...insertion,
+    };
+  }
+
+  return {
+    ok: true,
+    polygon: {
+      ...polygon,
+      points: normalizeRoomPolygonPoints(insertion.points),
+    },
+  };
+};
+
+export const insertRoomPolygonEdgeVertex = (
+  polygon: RoomPolygon,
+  edgeIndex: number,
+  nextPoint: DraftPoint,
+): InsertRoomPolygonEdgeVertexResult => {
+  const insertion = insertRoomPolygonVertexWithInvariantValidation(
+    polygon.points,
+    { edgeIndex },
+    nextPoint,
+  );
+
+  if (!insertion.ok) {
+    return {
+      ...insertion,
+      error:
+        insertion.error === 'vertex_index_out_of_range'
+          ? 'edge_index_out_of_range'
+          : insertion.error,
     };
   }
 

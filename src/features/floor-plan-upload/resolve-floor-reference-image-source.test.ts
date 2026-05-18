@@ -8,6 +8,7 @@ import {
 } from "./floor-plan-image-storage.ts";
 import {
   loadFloorReferenceImageSource,
+  resolveFloorReferenceImage,
   resolveFloorReferenceImageSource,
 } from "./resolve-floor-reference-image-source.ts";
 import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
@@ -67,7 +68,11 @@ test("resolves an uploaded floor plan asset into a canvas-ready image source", a
     {
       ok: true,
       floorId: "floor-1",
-      source: `data:image/png;base64,${asset.contentBase64}`,
+      image: {
+        usage: "editing-reference",
+        editable: false,
+        source: `data:image/png;base64,${asset.contentBase64}`,
+      },
     },
   );
 });
@@ -91,6 +96,21 @@ test("keeps legacy inline image sources usable", () => {
       storage,
     ),
     inlineSource,
+  );
+
+  assert.deepEqual(
+    resolveFloorReferenceImage(
+      {
+        floors,
+        selectedFloorId: "floor-1",
+      },
+      storage,
+    ),
+    {
+      usage: "editing-reference",
+      editable: false,
+      source: inlineSource,
+    },
   );
 });
 
@@ -167,6 +187,45 @@ test("returns the selected floor image source when other floors have different a
       storage,
     ),
     `data:image/png;base64,${floorTwoAsset.contentBase64}`,
+  );
+});
+
+test("returns a frozen read-only resolved reference image for editor consumers", async () => {
+  const storage = new InMemoryFloorPlanImageStorage();
+  const asset = await saveAcceptedFloorPlanImage(
+    {
+      projectId: "project-alpha",
+      floorId: "floor-1",
+      file: createPngTestFile("ground-floor.png"),
+    },
+    storage,
+  );
+  const floors = [
+    createEditorFloor({
+      floorId: "floor-1",
+      referenceImage: asset.assetRef,
+    }),
+  ];
+
+  const resolved = resolveFloorReferenceImage(
+    {
+      floors,
+      selectedFloorId: "floor-1",
+    },
+    storage,
+  );
+
+  assert.deepEqual(resolved, {
+    usage: "editing-reference",
+    editable: false,
+    source: `data:image/png;base64,${asset.contentBase64}`,
+  });
+  assert.equal(Object.isFrozen(resolved), true);
+  assert.throws(
+    () => {
+      (resolved as { source: string }).source = "data:image/png;base64,bXV0YXRlZA==";
+    },
+    /Cannot assign to read only property/,
   );
 });
 

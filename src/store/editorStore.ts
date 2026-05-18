@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { EditorFloor, EditorRoom } from "@/domain/editor-state";
-import { resolveFloorReferenceImageSource } from "@/features/floor-plan-upload/resolve-floor-reference-image-source";
+import {
+  resolveFloorReferenceImage,
+  type ResolvedFloorReferenceImage,
+} from "@/features/floor-plan-upload/resolve-floor-reference-image-source";
 import {
   createEditorStore,
   selectActiveFloor,
@@ -20,18 +23,25 @@ export function useActiveFloor(): EditorFloor | null {
 }
 
 export function useActiveFloorReferenceImageSource(): string | null {
+  const referenceImage = useActiveFloorReferenceImage();
+
+  return referenceImage?.source ?? null;
+}
+
+export function useActiveFloorReferenceImage(): Readonly<ResolvedFloorReferenceImage> | null {
   const floor = useActiveFloor();
   const floors = useEditorStore((s) => s.project.floors);
-  const [source, setSource] = useState<string | null>(null);
+  const [referenceImage, setReferenceImage] =
+    useState<Readonly<ResolvedFloorReferenceImage> | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
-      setSource(null);
+      setReferenceImage(null);
       return;
     }
 
-    setSource(
-      resolveFloorReferenceImageSource(
+    setReferenceImage(
+      resolveFloorReferenceImage(
         {
           floors,
           selectedFloorId: floor?.floorId ?? null,
@@ -41,7 +51,7 @@ export function useActiveFloorReferenceImageSource(): string | null {
     );
   }, [floor?.floorId, floor?.referenceImage, floors]);
 
-  return source;
+  return referenceImage;
 }
 
 export function useSelectedRoom(): EditorRoom | null {

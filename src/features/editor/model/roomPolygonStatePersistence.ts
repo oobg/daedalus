@@ -6,6 +6,7 @@ import {
 } from "../../../domain/editor-state.ts";
 import {
   deleteActiveRoomPolygonVertex,
+  insertActiveRoomPolygonEdgeVertex,
   insertActiveRoomPolygonVertex,
   moveActiveRoomPolygonVertex,
   type EditActiveRoomPolygonResult,
@@ -51,6 +52,20 @@ export const persistInsertedRoomPolygonVertex = (
 ): PersistRoomPolygonEditResult =>
   persistRoomPolygonEdit(project, context, (room) =>
     insertActiveRoomPolygonVertex(createPersistenceState(room), vertexIndex, nextPoint),
+  );
+
+export const persistInsertedRoomPolygonEdgeVertex = (
+  project: EditorProject,
+  context: RoomPolygonPersistenceContext,
+  edgeIndex: number,
+  nextPoint: EditorPoint,
+): PersistRoomPolygonEditResult =>
+  persistRoomPolygonEdit(project, context, (room) =>
+    insertActiveRoomPolygonEdgeVertex(
+      createPersistenceState(room),
+      edgeIndex,
+      nextPoint,
+    ),
   );
 
 export const persistDeletedRoomPolygonVertex = (

@@ -10,11 +10,17 @@ export interface ResolveFloorReferenceImageSourceInput {
   selectedFloorId: string | null;
 }
 
+export interface ResolvedFloorReferenceImage {
+  usage: "editing-reference";
+  editable: false;
+  source: string;
+}
+
 export type FloorReferenceImageSourceResult =
   | {
       ok: true;
       floorId: string;
-      source: string;
+      image: Readonly<ResolvedFloorReferenceImage>;
     }
   | {
       ok: false;
@@ -28,7 +34,16 @@ export function resolveFloorReferenceImageSource(
 ): string | null {
   const result = loadFloorReferenceImageSource(input, storage);
 
-  return result.ok ? result.source : null;
+  return result.ok ? result.image.source : null;
+}
+
+export function resolveFloorReferenceImage(
+  input: ResolveFloorReferenceImageSourceInput,
+  storage: FloorPlanImageStorage,
+): Readonly<ResolvedFloorReferenceImage> | null {
+  const result = loadFloorReferenceImageSource(input, storage);
+
+  return result.ok ? result.image : null;
 }
 
 export function loadFloorReferenceImageSource(
@@ -66,11 +81,15 @@ export function loadFloorReferenceImageSource(
   }
 
   if (isInlineImageSource(referenceImage)) {
-    return {
+    return Object.freeze({
       ok: true,
       floorId: input.selectedFloorId ?? "",
-      source: referenceImage,
-    };
+      image: Object.freeze({
+        usage: "editing-reference",
+        editable: false,
+        source: referenceImage,
+      }),
+    });
   }
 
   const asset = loadStoredFloorPlanImage(referenceImage, storage);
@@ -83,11 +102,15 @@ export function loadFloorReferenceImageSource(
     };
   }
 
-  return {
+  return Object.freeze({
     ok: true,
     floorId: input.selectedFloorId ?? "",
-    source: createFloorPlanImageDataUrl(asset),
-  };
+    image: Object.freeze({
+      usage: "editing-reference",
+      editable: false,
+      source: createFloorPlanImageDataUrl(asset),
+    }),
+  });
 }
 
 function isInlineImageSource(value: string): boolean {
