@@ -1,0 +1,286 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createEditorStore } from "./createEditorStore.ts";
+
+class MemoryStorage {
+  private readonly values = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+}
+
+test("commitDraft creates a room polygon record and persists it as room source data", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const initialProject = store.getState().project;
+  const activeFloorId = initialProject.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 80 });
+  store.getState().commitDraft();
+
+  const nextState = store.getState();
+  const floor = nextState.project.floors.find(
+    (candidate) => candidate.floorId === activeFloorId,
+  );
+
+  assert.ok(floor);
+  assert.equal(nextState.isDrawing, false);
+  assert.deepEqual(nextState.draftPoints, []);
+  assert.equal(floor.rooms.length, 1);
+  assert.deepEqual(floor.rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 70, y: 20 },
+    { x: 70, y: 80 },
+  ]);
+  assert.equal(floor.rooms[0].roomName, "Room 1");
+  assert.equal(floor.rooms[0].area, 1800);
+  assert.deepEqual(floor.rooms[0].labelPosition, {
+    x: 50,
+    y: 40,
+  });
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 70, y: 20 },
+    { x: 70, y: 80 },
+  ]);
+  assert.equal(persistedProject.floors[0].rooms[0].area, 1800);
+  assert.notEqual(persistedProject.floors[0].rooms[0].roomId, "");
+});
+
+test("updateRoom persists edited room polygons as the saved room source of truth", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const initialProject = store.getState().project;
+  const activeFloorId = initialProject.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 80 });
+  store.getState().commitDraft();
+
+  const createdRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(createdRoom);
+
+  store.getState().updateRoom(activeFloorId, createdRoom.roomId, {
+    roomPolygon: [
+      { x: 10, y: 20 },
+      { x: 90, y: 20 },
+      { x: 90, y: 100 },
+      { x: 10, y: 100 },
+    ],
+  });
+
+  const updatedRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(updatedRoom);
+  assert.deepEqual(updatedRoom.roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 90, y: 100 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(updatedRoom.area, 6400);
+  assert.deepEqual(updatedRoom.labelPosition, {
+    x: 50,
+    y: 60,
+  });
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 90, y: 100 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(persistedProject.floors[0].rooms[0].area, 6400);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].labelPosition, {
+    x: 50,
+    y: 60,
+  });
+});
+
+test("updateRoom normalizes duplicated closing vertices before persisting room polygons", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const activeFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 80 });
+  store.getState().commitDraft();
+
+  const createdRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(createdRoom);
+
+  store.getState().updateRoom(activeFloorId, createdRoom.roomId, {
+    roomPolygon: [
+      { x: 10, y: 20 },
+      { x: 90, y: 20 },
+      { x: 90, y: 100 },
+      { x: 10, y: 100 },
+      { x: 10, y: 20 },
+    ],
+  });
+
+  const updatedRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(updatedRoom);
+  assert.deepEqual(updatedRoom.roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 90, y: 100 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(updatedRoom.area, 6400);
+  assert.deepEqual(updatedRoom.labelPosition, {
+    x: 50,
+    y: 60,
+  });
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 10, y: 20 },
+    { x: 90, y: 20 },
+    { x: 90, y: 100 },
+    { x: 10, y: 100 },
+  ]);
+  assert.equal(persistedProject.floors[0].rooms[0].area, 6400);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].labelPosition, {
+    x: 50,
+    y: 60,
+  });
+});
+
+test("replaceProject normalizes closed room polygons and recalculates derived room data", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+
+  store.getState().replaceProject({
+    projectId: "project-normalized",
+    projectName: "Normalized Project",
+    objectVersion: 1,
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "1F",
+        floorHeight: 3,
+        referenceImage: null,
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Lobby",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 4 },
+              { x: 0, y: 4 },
+              { x: 0, y: 0 },
+            ],
+            sharedBoundaries: [],
+            area: 999,
+            labelPosition: { x: 99, y: 99 },
+            openings: [],
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      selectedRoomId: null,
+    },
+    exteriorPolygon: null,
+  });
+
+  const replacedRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(replacedRoom);
+  assert.deepEqual(replacedRoom.roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
+  ]);
+  assert.equal(replacedRoom.area, 32);
+  assert.deepEqual(replacedRoom.labelPosition, { x: 4, y: 2 });
+
+  store.getState().saveToLocalStorage();
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
+  ]);
+  assert.equal(persistedProject.floors[0].rooms[0].area, 32);
+  assert.deepEqual(persistedProject.floors[0].rooms[0].labelPosition, {
+    x: 4,
+    y: 2,
+  });
+});
+
+test("removeRoom deletes the room polygon record from persisted editor state", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const initialProject = store.getState().project;
+  const activeFloorId = initialProject.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().setActiveTool("room");
+  store.getState().addDraftPoint({ x: 10, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 20 });
+  store.getState().addDraftPoint({ x: 70, y: 80 });
+  store.getState().commitDraft();
+
+  const createdRoom = store.getState().project.floors[0]?.rooms[0];
+  assert.ok(createdRoom);
+
+  store.getState().removeRoom(activeFloorId, createdRoom.roomId);
+
+  const nextFloor = store
+    .getState()
+    .project.floors.find((candidate) => candidate.floorId === activeFloorId);
+
+  assert.ok(nextFloor);
+  assert.equal(nextFloor.rooms.length, 0);
+  assert.equal(store.getState().project.viewState.selectedRoomId, null);
+
+  const serializedProject = storage.getItem("daedalus.project");
+  assert.ok(serializedProject);
+
+  const persistedProject = JSON.parse(serializedProject);
+  assert.deepEqual(persistedProject.floors[0].rooms, []);
+});

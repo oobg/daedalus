@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { normalizeFloor } from "../../domain/floor.ts";
 import { associatePersistedFloorPlanUploadToFloor } from "./associate-persisted-floor-plan-upload.ts";
+import { readFloorReferenceAssociation } from "./read-floor-reference-association.ts";
 
 test("associatePersistedFloorPlanUploadToFloor links a persisted upload record to the selected floor", () => {
   const floors = [
@@ -19,6 +20,7 @@ test("associatePersistedFloorPlanUploadToFloor links a persisted upload record t
   ];
 
   const persistedUpload = {
+    floorId: "floor-1",
     assetRef: "floor-plan://project-alpha/floor-1/uploaded-ground.png",
   };
 
@@ -38,4 +40,69 @@ test("associatePersistedFloorPlanUploadToFloor links a persisted upload record t
   );
   assert.notEqual(result.floors[0], floors[0]);
   assert.equal(result.floors[1], floors[1]);
+});
+
+test("associatePersistedFloorPlanUploadToFloor rejects a persisted upload from another floor", () => {
+  const floors = [
+    normalizeFloor({
+      id: "floor-1",
+      name: "Ground Floor",
+      referenceImage: null,
+    }),
+    normalizeFloor({
+      id: "floor-2",
+      name: "Second Floor",
+      referenceImage: null,
+    }),
+  ];
+
+  assert.throws(
+    () =>
+      associatePersistedFloorPlanUploadToFloor({
+        floors,
+        floorId: "floor-1",
+        persistedUpload: {
+          floorId: "floor-2",
+          assetRef: "floor-plan://project-alpha/floor-2/uploaded-second.png",
+        },
+      }),
+    /belongs to floor "floor-2", not "floor-1"/,
+  );
+});
+
+test("associatePersistedFloorPlanUploadToFloor preserves the floor-to-image mapping across write then query without mutating inputs", () => {
+  const floors = [
+    normalizeFloor({
+      id: "floor-1",
+      name: "Ground Floor",
+      referenceImage: null,
+    }),
+    normalizeFloor({
+      id: "floor-2",
+      name: "Second Floor",
+      referenceImage: "floor-plan://project-alpha/floor-2/existing.png",
+    }),
+  ];
+  const originalFirstFloor = floors[0];
+  const persistedUpload = {
+    floorId: "floor-1",
+    assetRef: "floor-plan://project-alpha/floor-1/uploaded-ground.png",
+  };
+
+  const result = associatePersistedFloorPlanUploadToFloor({
+    floors,
+    floorId: "floor-1",
+    persistedUpload,
+  });
+
+  const queriedReferenceImage = readFloorReferenceAssociation({
+    floors: result.floors,
+    floorId: "floor-1",
+  });
+
+  assert.equal(queriedReferenceImage, persistedUpload.assetRef);
+  assert.equal(floors[0], originalFirstFloor);
+  assert.equal(floors[0].referenceImage, null);
+  assert.notEqual(result.persistedUpload, persistedUpload);
+  assert.deepEqual(result.persistedUpload, persistedUpload);
 });

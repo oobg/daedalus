@@ -7,6 +7,7 @@ import {
   type EditorProjectState,
   type SerializedProjectData,
 } from "../project-export/project-serializer.ts";
+import { validateUploadedProjectSchema } from "../project-export/validate-uploaded-project-schema.ts";
 import {
   loadProjectFromLocalStorage,
   type LocalProjectStorage,
@@ -33,8 +34,10 @@ export type RestoreUploadedProjectStateResult =
 export function restoreEditorRuntimeState(
   project: SerializedProjectData,
 ): RestoredEditorRuntimeState {
+  const validatedProject = normalizeSavedProjectForRestore(project);
+
   return {
-    project: restoreProjectFromImport(project),
+    project: restoreProjectFromImport(validatedProject),
   };
 }
 
@@ -75,4 +78,22 @@ export function restoreStoredProjectRecord(
     storageKey: record.storageKey,
     state: restoreEditorRuntimeState(record.project),
   };
+}
+
+function normalizeSavedProjectForRestore(
+  project: SerializedProjectData,
+): SerializedProjectData {
+  const validated = validateUploadedProjectSchema(
+    project as unknown as Record<string, unknown>,
+  );
+
+  if (validated.ok) {
+    return validated.value;
+  }
+
+  const failureSummary = validated.errors
+    .map(({ path, message }) => `${path}: ${message}`)
+    .join("; ");
+
+  throw new Error(`Saved project data is invalid: ${failureSummary}`);
 }

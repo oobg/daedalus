@@ -15,7 +15,7 @@ export async function createFloorPlanImageAsset(
   input: CreateFloorPlanImageAssetInput,
   storage: FloorPlanImageStorage,
 ): Promise<StoredFloorPlanImageAsset> {
-  const validation = validateFloorPlanUploadPayload(input);
+  const validation = await validateFloorPlanUploadPayload(input);
 
   if (!validation.ok) {
     throw new Error(

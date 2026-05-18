@@ -274,6 +274,84 @@ test("saveProjectToLocalStorage preserves each configured editor floor height", 
   );
 });
 
+test("saveProjectToLocalStorage writes distinct floor heights into the saved JSON output", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const project = {
+    projectId: "project-floor-height-json",
+    objectVersion: 1,
+    projectName: "Floor Height JSON",
+    floors: [
+      {
+        floorId: "floor-ground",
+        floorName: "Ground Floor",
+        floorHeight: 3.25,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        floorId: "floor-second",
+        floorName: "Second Floor",
+        floorHeight: 4.5,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+      {
+        floorId: "floor-mechanical",
+        floorName: "Mechanical",
+        floorHeight: 2.75,
+        referenceImage: null,
+        rooms: [],
+        verticalConnectors: [],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-second",
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+    },
+    assets: [],
+    annotations: [],
+    editorConfig: {
+      selectedTool: "select",
+      snapToGrid: true,
+      gridSize: 32,
+      showGrid: true,
+      showReferenceImages: true,
+      showRoomLabels: true,
+    },
+  };
+
+  saveProjectToLocalStorage(project, storage);
+
+  const savedRecord = JSON.parse(
+    storage.getItem(getProjectStorageKey(project.projectId)) ?? "null",
+  ) as { project: typeof project } | null;
+
+  assert.ok(savedRecord);
+  assert.deepEqual(
+    savedRecord.project.floors.map(({ floorId, floorHeight }) => ({
+      floorId,
+      floorHeight,
+    })),
+    [
+      {
+        floorId: "floor-ground",
+        floorHeight: 3.25,
+      },
+      {
+        floorId: "floor-second",
+        floorHeight: 4.5,
+      },
+      {
+        floorId: "floor-mechanical",
+        floorHeight: 2.75,
+      },
+    ],
+  );
+});
+
 test("loadProjectFromLocalStorage returns null when no saved project exists", () => {
   const storage = new InMemoryLocalProjectStorage();
 

@@ -7,11 +7,11 @@ import {
 } from "../../domain/editor-state.ts";
 import type {
   ReadonlyEditorStateProjection,
+  ReadonlyRendererSnapshotProject,
   RendererConsumer,
   RendererSnapshotFloor,
   RendererSnapshotOpening,
   RendererSnapshotPoint,
-  RendererSnapshotProject,
   RendererSnapshotRoom,
   RendererSnapshotSharedBoundary,
   RendererSnapshotVerticalConnector,
@@ -60,8 +60,8 @@ export function serializeEditorStateProjection(
 
 export function projectEditorStateForRenderer(
   project: EditorProject,
-): RendererSnapshotProject {
-  return {
+): ReadonlyRendererSnapshotProject {
+  return deepFreeze({
     projectId: project.projectId,
     projectName: project.projectName,
     objectVersion: project.objectVersion,
@@ -70,7 +70,7 @@ export function projectEditorStateForRenderer(
       activeFloorId: project.viewState.activeFloorId,
       selectedRoomId: project.viewState.selectedRoomId,
     },
-  };
+  });
 }
 
 function projectFloorForRenderer(floor: EditorFloor): RendererSnapshotFloor {

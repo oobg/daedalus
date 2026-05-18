@@ -1,4 +1,10 @@
-import type { DraftPoint } from './roomDraft.ts';
+import {
+  validateRoomPolygonVertexEditInvariant,
+} from './roomPolygonInvariantValidation.ts';
+import type {
+  Point2D,
+  RoomPolygonValidationFailure,
+} from './roomPolygonValidation.ts';
 
 export interface InsertRoomPolygonVertexAtEdge {
   readonly edgeIndex: number;
@@ -12,17 +18,28 @@ export type InsertRoomPolygonVertexTarget =
   | InsertRoomPolygonVertexAtEdge
   | InsertRoomPolygonVertexAtVertex;
 
-const pointsEqual = (left: DraftPoint, right: DraftPoint): boolean =>
+const pointsEqual = (left: Point2D, right: Point2D): boolean =>
   left.x === right.x && left.y === right.y;
 
-const isClosedPolygon = (points: readonly DraftPoint[]): boolean =>
+const isClosedPolygon = (points: readonly Point2D[]): boolean =>
   points.length > 1 && pointsEqual(points[0], points[points.length - 1]);
 
+export type RoomPolygonVertexInsertionResult =
+  | {
+      readonly ok: true;
+      readonly points: Point2D[];
+    }
+  | {
+      readonly ok: false;
+      readonly error: 'vertex_index_out_of_range' | 'invalid_polygon';
+      readonly validation?: RoomPolygonValidationFailure;
+    };
+
 export const insertRoomPolygonVertexAt = (
-  points: readonly DraftPoint[],
+  points: readonly Point2D[],
   target: InsertRoomPolygonVertexTarget,
-  nextPoint: DraftPoint,
-): DraftPoint[] | null => {
+  nextPoint: Point2D,
+): Point2D[] | null => {
   const closed = isClosedPolygon(points);
   const openPoints = closed ? points.slice(0, -1) : points.slice();
   const insertionAfterIndex =
@@ -50,4 +67,34 @@ export const insertRoomPolygonVertexAt = (
   }
 
   return [...nextOpenPoints, nextOpenPoints[0]];
+};
+
+export const insertRoomPolygonVertexWithInvariantValidation = (
+  points: readonly Point2D[],
+  target: InsertRoomPolygonVertexTarget,
+  nextPoint: Point2D,
+): RoomPolygonVertexInsertionResult => {
+  const nextPoints = insertRoomPolygonVertexAt(points, target, nextPoint);
+
+  if (nextPoints === null) {
+    return {
+      ok: false,
+      error: 'vertex_index_out_of_range',
+    };
+  }
+
+  const validation = validateRoomPolygonVertexEditInvariant(nextPoints);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: 'invalid_polygon',
+      validation: validation.validation,
+    };
+  }
+
+  return {
+    ok: true,
+    points: nextPoints,
+  };
 };

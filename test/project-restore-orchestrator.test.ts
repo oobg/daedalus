@@ -204,6 +204,16 @@ test("restoreEditorRuntimeState assembles a runtime state wrapper around hydrate
   assert.equal(restored.project.assets?.[0].assetId, "asset-ground-plan");
   assert.equal(restored.project.annotations?.[0].annotationId, "annotation-lobby");
   assert.deepEqual(restored.project.editorConfig, serialized.editorConfig);
+  assert.deepEqual(
+    restored.project.floors.map(({ id, height }) => ({
+      id,
+      height,
+    })),
+    [
+      { id: "floor-1", height: 3.5 },
+      { id: "floor-2", height: 4 },
+    ],
+  );
 
   const graph = getProjectRelationshipGraph(restored.project);
   assert.equal(graph.roomById.get("room-gallery"), restored.project.floors[0].rooms[1]);
@@ -267,11 +277,46 @@ test("restoreStoredProjectState rebuilds runtime relationships from a saved loca
   assert.deepEqual(restored?.savedAt, stored.savedAt);
   assert.deepEqual(restored?.storageKey, stored.storageKey);
   assert.equal(restored?.state.project.projectId, serialized.projectId);
+  assert.deepEqual(
+    restored?.state.project.floors.map(({ id, height }) => ({
+      id,
+      height,
+    })),
+    [
+      { id: "floor-1", height: 3.5 },
+      { id: "floor-2", height: 4 },
+    ],
+  );
   assert.equal(
     getProjectRelationshipGraph(restored!.state.project).annotationById.get(
       "annotation-lobby",
     )?.room,
     restored!.state.project.floors[0].rooms[0],
+  );
+});
+
+test("restoreStoredProjectState preserves distinct floor heights when loading a multi-floor saved record", () => {
+  const storage = new InMemoryLocalProjectStorage();
+  const serialized = createSerializedProject();
+
+  saveProjectToLocalStorage(
+    serialized,
+    storage,
+    new Date("2026-05-13T15:00:00.000Z"),
+  );
+
+  const restored = restoreStoredProjectState(serialized.projectId, storage);
+
+  assert.ok(restored);
+  assert.deepEqual(
+    restored.state.project.floors.map(({ id, height }) => ({
+      id,
+      height,
+    })),
+    serialized.floors.map(({ floorId, floorHeight }) => ({
+      id: floorId,
+      height: floorHeight,
+    })),
   );
 });
 

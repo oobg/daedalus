@@ -24,11 +24,21 @@ export interface StoredFloorPlanImageAsset {
   contentBase64: string;
 }
 
+export interface StoredFloorPlanImageAssetMetadata {
+  assetRef: string;
+  storageKey: string;
+  projectId: string;
+  floorId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export async function saveAcceptedFloorPlanImage(
   input: SaveFloorPlanImageInput,
   storage: FloorPlanImageStorage,
 ): Promise<StoredFloorPlanImageAsset> {
-  const validation = validateFloorPlanImageUpload(input.file);
+  const validation = await validateFloorPlanImageUpload(input.file);
 
   if (!validation.ok) {
     throw new Error(
@@ -54,7 +64,7 @@ export async function saveAcceptedFloorPlanImage(
     contentBase64: encodeBase64(contentBytes),
   };
 
-  storage.setItem(asset.storageKey, JSON.stringify(asset));
+  persistFloorPlanImageAsset(asset, storage);
 
   return asset;
 }
@@ -72,6 +82,27 @@ export function loadStoredFloorPlanImage(
   return JSON.parse(serialized) as StoredFloorPlanImageAsset;
 }
 
+export function loadStoredFloorPlanImageMetadata(
+  assetRef: string,
+  storage: FloorPlanImageStorage,
+): Readonly<StoredFloorPlanImageAssetMetadata> | null {
+  const asset = loadStoredFloorPlanImage(assetRef, storage);
+
+  if (asset == null) {
+    return null;
+  }
+
+  return Object.freeze({
+    assetRef: asset.assetRef,
+    storageKey: asset.storageKey,
+    projectId: asset.projectId,
+    floorId: asset.floorId,
+    fileName: asset.fileName,
+    mimeType: asset.mimeType,
+    size: asset.size,
+  });
+}
+
 export function createFloorPlanImageDataUrl(
   asset: StoredFloorPlanImageAsset,
 ): string {
@@ -80,6 +111,21 @@ export function createFloorPlanImageDataUrl(
 
 export function getFloorPlanAssetStorageKey(assetRef: string): string {
   return `${FLOOR_PLAN_ASSET_STORAGE_KEY_PREFIX}:${assetRef}`;
+}
+
+function persistFloorPlanImageAsset(
+  asset: StoredFloorPlanImageAsset,
+  storage: FloorPlanImageStorage,
+): void {
+  const serializedAsset = JSON.stringify(asset);
+
+  storage.setItem(asset.storageKey, serializedAsset);
+
+  if (storage.getItem(asset.storageKey) !== serializedAsset) {
+    throw new Error(
+      `Failed to persist floor plan image asset "${asset.assetRef}" to storage backend.`,
+    );
+  }
 }
 
 async function createFloorPlanAssetRef(input: {

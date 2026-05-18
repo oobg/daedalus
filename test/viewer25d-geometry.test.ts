@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { resolveFloorVerticalPlacements } from "../src/domain/floor.ts";
 import {
   createRoomSurfaceLayout,
   createWallContourOffsets,
@@ -111,6 +112,36 @@ test("resolveViewer25DFloorRenderPlacements converts configured floor heights in
     { floorId: "floor-gallery", verticalOffset: 2.5, renderVerticalOffset: 0.75 },
     { floorId: "floor-roof", verticalOffset: 6.25, renderVerticalOffset: 1.875 },
   ]);
+});
+
+test("resolveViewer25DFloorRenderPlacements uses computed per-floor elevations for render stacking", () => {
+  const floors = [
+    { floorId: "floor-ground", floorHeight: 2.25 },
+    { floorId: "floor-atrium", floorHeight: 5.5 },
+    { floorId: "floor-bridge", floorHeight: 2.75 },
+  ] as const;
+  const computedElevations = resolveFloorVerticalPlacements(
+    floors.map((floor) => ({
+      id: floor.floorId,
+      name: floor.floorId,
+      height: floor.floorHeight,
+      referenceImage: null,
+    })),
+  );
+  const placements = resolveViewer25DFloorRenderPlacements(floors, 0.3);
+
+  assert.deepEqual(
+    placements.map(({ floorId, verticalOffset, renderVerticalOffset }) => ({
+      floorId,
+      verticalOffset,
+      renderVerticalOffset,
+    })),
+    computedElevations.map(({ floorId, offset }) => ({
+      floorId,
+      verticalOffset: offset,
+      renderVerticalOffset: Number((offset * 0.3).toFixed(6)),
+    })),
+  );
 });
 
 test("resolveViewer25DFloorExtrusionDepth derives render depth from configured floor height", () => {

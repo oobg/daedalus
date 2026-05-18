@@ -1,5 +1,5 @@
 import type {
-  RendererSnapshotProject,
+  ReadonlyRendererSnapshotProject,
   RenderSceneData,
 } from "./renderer-contract.ts";
 import { adaptProjectSnapshotToRenderScene } from "./renderer-input-adapter.ts";
@@ -10,7 +10,7 @@ export interface RendererPort<Output> {
 
 export interface RendererEntrypoint<Output> {
   renderScene(scene: Readonly<RenderSceneData>): Output;
-  renderProjectSnapshot(project: RendererSnapshotProject): Output;
+  renderProjectSnapshot(project: ReadonlyRendererSnapshotProject): Output;
 }
 
 export function createRendererEntrypoint<Output>(
@@ -27,7 +27,7 @@ export function createRendererEntrypoint<Output>(
 }
 
 export function renderProjectSnapshot<Output>(
-  project: RendererSnapshotProject,
+  project: ReadonlyRendererSnapshotProject,
   renderer: RendererPort<Output>,
 ): Output {
   return createRendererEntrypoint(renderer).renderProjectSnapshot(project);

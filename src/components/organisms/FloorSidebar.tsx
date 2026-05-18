@@ -13,6 +13,7 @@ import {
   formatFloorHeightEditorValue,
 } from "@/features/editor/model/floorHeightEditing";
 import { FloorHeightConfiguration } from "@/components/organisms/FloorHeightConfiguration";
+import { validateUploadedProjectFile } from "@/features/project-export/validate-uploaded-project-file";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -31,6 +32,7 @@ export default function FloorSidebar() {
   const replaceProject    = useEditorStore(s => s.replaceProject);
   const setActiveFloor    = useEditorStore(s => s.setActiveFloor);
   const updateFloor       = useEditorStore(s => s.updateFloor);
+  const updateActiveFloorHeight = useEditorStore(s => s.updateActiveFloorHeight);
   const setActiveFloorReferenceImage = useEditorStore(s => s.setActiveFloorReferenceImage);
   const saveToLocalStorage    = useEditorStore(s => s.saveToLocalStorage);
   const loadFromLocalStorage  = useEditorStore(s => s.loadFromLocalStorage);
@@ -46,13 +48,20 @@ export default function FloorSidebar() {
 
   function handleImportJSON(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const validation = validateUploadedProjectFile(file);
+
+    if (!validation.ok) {
+      alert(`가져오기 실패: ${validation.message}`);
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = ev => {
       const result = importJSON(ev.target?.result as string);
       if (!result.ok) alert(`가져오기 실패: ${result.error}`);
     };
-    reader.readAsText(file);
+    reader.readAsText(validation.file);
     e.target.value = "";
   }
 
@@ -130,7 +139,13 @@ export default function FloorSidebar() {
           floorHeightInput={floorHeightInput}
           onSelectFloor={setActiveFloor}
           onFloorHeightInputChange={setFloorHeightInput}
-          onFloorHeightChange={({ floorId, floorHeight }) => updateFloor(floorId, { floorHeight })}
+          onFloorHeightChange={({ floorId, floorHeight }) => {
+            if (floorId !== activeFloorId) {
+              return;
+            }
+
+            updateActiveFloorHeight(floorHeight);
+          }}
           onFloorHeightInputBlur={handleFloorHeightBlur}
         />
       </div>

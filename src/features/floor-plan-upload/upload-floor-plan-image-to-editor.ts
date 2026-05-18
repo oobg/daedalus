@@ -23,7 +23,7 @@ export async function uploadFloorPlanImageToEditor(
   input: UploadFloorPlanImageToEditorInput,
   storage: FloorPlanImageStorage,
 ): Promise<UploadFloorPlanImageToEditorResult> {
-  const validation = validateFloorPlanUploadPayload({
+  const validation = await validateFloorPlanUploadPayload({
     projectId: input.project.projectId,
     floorId: input.selectedFloorId ?? "",
     upload: input.upload,

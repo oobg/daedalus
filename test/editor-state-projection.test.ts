@@ -30,7 +30,6 @@ test("projectEditorStateForRenderer projects editor state into the stable render
               { x: 10, y: 0 },
               { x: 10, y: 6 },
               { x: 0, y: 6 },
-              { x: 0, y: 0 },
             ],
             sharedBoundaries: [
               {
@@ -96,7 +95,6 @@ test("projectEditorStateForRenderer projects editor state into the stable render
               { x: 10, y: 0 },
               { x: 10, y: 6 },
               { x: 0, y: 6 },
-              { x: 0, y: 0 },
             ],
             sharedBoundaries: [
               {
@@ -106,7 +104,7 @@ test("projectEditorStateForRenderer projects editor state into the stable render
               },
             ],
             area: 60,
-            labelPosition: { x: 4, y: 2.4 },
+            labelPosition: { x: 5, y: 3 },
             walls: [
               {
                 edgeId: "room-lobby:edge:0",
@@ -166,7 +164,23 @@ test("projectEditorStateForRenderer projects editor state into the stable render
 test("createReadonlyEditorStateProjection freezes the viewer and renderer projection envelope", () => {
   const project = createEditorProject({
     projectId: "project-readonly",
-    floors: [{ floorId: "floor-1" }],
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-1",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 3 },
+              { x: 0, y: 3 },
+              { x: 0, y: 0 },
+            ],
+          },
+        ],
+      },
+    ],
   });
 
   const projection = createReadonlyEditorStateProjection(project, {
@@ -186,6 +200,37 @@ test("createReadonlyEditorStateProjection freezes the viewer and renderer projec
   assert.equal(Object.isFrozen(projection), true);
   assert.equal(Object.isFrozen(projection.project), true);
   assert.equal(Object.isFrozen(projection.project.floors), true);
+  assert.equal(Object.isFrozen(projection.project.floors[0].rooms[0]), true);
+  assert.equal(
+    Object.isFrozen(projection.project.floors[0].rooms[0].roomPolygon),
+    true,
+  );
+  assert.equal(
+    Object.isFrozen(projection.project.floors[0].rooms[0].roomPolygon[1]),
+    true,
+  );
+
+  assert.throws(() => {
+    ((
+      projection.project.floors[0].rooms[0].roomPolygon as {
+        push(point: { x: number; y: number }): void;
+      }
+    ) as unknown as {
+      push(point: { x: number; y: number }): void;
+    }).push({ x: 99, y: 99 });
+  }, TypeError);
+  assert.throws(() => {
+    (
+      projection.project.floors[0].rooms[0].roomPolygon[1] as {
+        x: number;
+        y: number;
+      }
+    ).x = 99;
+  }, TypeError);
+  assert.deepEqual(project.floors[0].rooms[0].roomPolygon[1], {
+    x: 4,
+    y: 0,
+  });
 });
 
 test("serializeEditorStateProjection returns a JSON-safe cloned projection", () => {

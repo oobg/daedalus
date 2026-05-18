@@ -3,6 +3,8 @@ import {
   calculateRoomPolygonLabelPosition,
   createRoomPolygonSource,
 } from "./room-polygon-source.ts";
+import { closeRoomOutline } from "../features/editor/model/roomPolygonClosure.ts";
+import { validateRoomPolygon as validateClosedRoomPolygon } from "../features/editor/model/roomPolygonValidation.ts";
 import {
   type EditorPoint,
   type RoomOpening,
@@ -70,7 +72,7 @@ export function validateEditorRoomInput(
     };
   }
 
-  const roomPolygon = clonePoints(input.roomPolygon ?? []);
+  const roomPolygon = normalizePersistedRoomPolygon(input.roomPolygon ?? []);
   const polygonError = validateRoomPolygon(roomPolygon);
 
   if (polygonError != null) {
@@ -170,11 +172,31 @@ function validateRoomPolygon(
     };
   }
 
-  if (calculatePolygonArea(points) === 0) {
-    return {
-      code: "invalid_room_polygon",
-      message: "Room polygon must define a non-empty closed shape.",
-    };
+  const validation = validateClosedRoomPolygon(closeRoomOutline(points));
+
+  if (!validation.ok) {
+    switch (validation.error) {
+      case "polygon_area_must_be_non_zero":
+        return {
+          code: "invalid_room_polygon",
+          message: "Room polygon must define a non-empty closed shape.",
+        };
+      case "polygon_self_intersects":
+        return {
+          code: "invalid_room_polygon",
+          message: "Room polygon must not self-intersect.",
+        };
+      case "polygon_points_must_be_finite":
+        return {
+          code: "invalid_room_polygon",
+          message: "Room polygon points must use finite x/y coordinates.",
+        };
+      default:
+        return {
+          code: "invalid_room_polygon",
+          message: "Room polygon must define a valid shape.",
+        };
+    }
   }
 
   return null;
@@ -218,6 +240,21 @@ function clonePoints(points: readonly EditorPoint[]): EditorPoint[] {
     x: point.x,
     y: point.y,
   }));
+}
+
+function normalizePersistedRoomPolygon(
+  points: readonly EditorPoint[],
+): EditorPoint[] {
+  const clonedPoints = clonePoints(points);
+
+  if (
+    clonedPoints.length > 1 &&
+    pointsEqual(clonedPoints[0], clonedPoints[clonedPoints.length - 1])
+  ) {
+    return clonedPoints.slice(0, -1);
+  }
+
+  return clonedPoints;
 }
 
 function cloneSharedBoundaries(
@@ -265,4 +302,8 @@ function optionalMetadataField(
 
 function normalizeRequiredString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function pointsEqual(left: EditorPoint, right: EditorPoint): boolean {
+  return left.x === right.x && left.y === right.y;
 }

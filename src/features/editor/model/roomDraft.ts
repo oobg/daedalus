@@ -3,12 +3,18 @@ import { validateMinimumRoomPolygonVertices } from './roomPolygonMinimumVertexVa
 import { normalizeRoomPolygonPoints } from './roomPolygonNormalization.ts';
 import {
   validateRoomPolygon,
-  validateRoomPolygonForOperation,
   type RoomPolygonValidationFailure,
 } from './roomPolygonValidation.ts';
 import { createRoomObjectFromClosedPolygon } from './roomObjectInstantiation.ts';
-import { insertRoomPolygonVertexAt } from './roomPolygonVertexInsertion.ts';
-import { removeRoomPolygonVertexAt } from './roomPolygonVertexRemoval.ts';
+import {
+  insertRoomPolygonVertexWithInvariantValidation,
+} from './roomPolygonVertexInsertion.ts';
+import {
+  moveRoomPolygonVertexWithInvariantValidation,
+} from './roomPolygonVertexMovement.ts';
+import {
+  removeRoomPolygonVertexWithInvariantValidation,
+} from './roomPolygonVertexRemoval.ts';
 
 export interface DraftPoint {
   readonly x: number;
@@ -74,6 +80,12 @@ export const collectRoomDraftPoints = (
     (draft, point) => appendRoomDraftPoint(draft, point),
     createRoomDraftPolygon(roomId),
   );
+
+export const createRoomPolygonFromOrderedPoints = (
+  roomId: string,
+  points: readonly DraftPoint[],
+): RoomPolygon =>
+  finalizeRoomDraftPolygon(collectRoomDraftPoints(roomId, points));
 
 export const finalizeRoomDraftPolygon = (
   draft: RoomDraftPolygon,
@@ -145,34 +157,15 @@ export const moveRoomPolygonVertex = (
   vertexIndex: number,
   nextPoint: DraftPoint,
 ): MoveRoomPolygonVertexResult => {
-  const lastVertexIndex = polygon.points.length - 2;
+  const movement = moveRoomPolygonVertexWithInvariantValidation(
+    polygon.points,
+    vertexIndex,
+    nextPoint,
+  );
 
-  if (vertexIndex < 0 || vertexIndex > lastVertexIndex) {
+  if (!movement.ok) {
     return {
-      ok: false,
-      error: 'vertex_index_out_of_range',
-    };
-  }
-
-  const nextPoints = polygon.points.map((point, index) => {
-    if (index === vertexIndex) {
-      return nextPoint;
-    }
-
-    if (vertexIndex === 0 && index === polygon.points.length - 1) {
-      return nextPoint;
-    }
-
-    return point;
-  });
-
-  const validation = validateRoomPolygonForOperation(nextPoints);
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      error: 'invalid_polygon',
-      validation: validation.validation,
+      ...movement,
     };
   }
 
@@ -180,7 +173,7 @@ export const moveRoomPolygonVertex = (
     ok: true,
     polygon: {
       ...polygon,
-      points: normalizeRoomPolygonPoints(nextPoints),
+      points: normalizeRoomPolygonPoints(movement.points),
     },
   };
 };
@@ -190,26 +183,15 @@ export const insertRoomPolygonVertex = (
   vertexIndex: number,
   nextPoint: DraftPoint,
 ): InsertRoomPolygonVertexResult => {
-  const nextPoints = insertRoomPolygonVertexAt(
+  const insertion = insertRoomPolygonVertexWithInvariantValidation(
     polygon.points,
     { vertexIndex },
     nextPoint,
   );
 
-  if (nextPoints === null) {
+  if (!insertion.ok) {
     return {
-      ok: false,
-      error: 'vertex_index_out_of_range',
-    };
-  }
-
-  const validation = validateRoomPolygonForOperation(nextPoints);
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      error: 'invalid_polygon',
-      validation: validation.validation,
+      ...insertion,
     };
   }
 
@@ -217,7 +199,7 @@ export const insertRoomPolygonVertex = (
     ok: true,
     polygon: {
       ...polygon,
-      points: normalizeRoomPolygonPoints(nextPoints),
+      points: normalizeRoomPolygonPoints(insertion.points),
     },
   };
 };
@@ -226,31 +208,14 @@ export const deleteRoomPolygonVertex = (
   polygon: RoomPolygon,
   vertexIndex: number,
 ): DeleteRoomPolygonVertexResult => {
-  const lastVertexIndex = polygon.points.length - 2;
+  const removal = removeRoomPolygonVertexWithInvariantValidation(
+    polygon.points,
+    vertexIndex,
+  );
 
-  if (vertexIndex < 0 || vertexIndex > lastVertexIndex) {
+  if (!removal.ok) {
     return {
-      ok: false,
-      error: 'vertex_index_out_of_range',
-    };
-  }
-
-  const nextPoints = removeRoomPolygonVertexAt(polygon.points, vertexIndex);
-
-  if (nextPoints === null) {
-    return {
-      ok: false,
-      error: 'vertex_index_out_of_range',
-    };
-  }
-
-  const validation = validateRoomPolygonForOperation(nextPoints);
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      error: 'invalid_polygon',
-      validation: validation.validation,
+      ...removal,
     };
   }
 
@@ -258,7 +223,7 @@ export const deleteRoomPolygonVertex = (
     ok: true,
     polygon: {
       ...polygon,
-      points: normalizeRoomPolygonPoints(nextPoints),
+      points: normalizeRoomPolygonPoints(removal.points),
     },
   };
 };

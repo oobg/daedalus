@@ -17,12 +17,23 @@ import {
 } from "@/features/editor/model/roomDraftPreview";
 import { getRoomPolygonDraftRenderState } from "@/features/editor/model/roomPolygonDrawingMode";
 import {
+  beginRoomPolygonPointerDrawing,
+  completeRoomPolygonPointerDrawing,
+  updateRoomPolygonPointerDrawing,
+  type RoomPolygonPointerSession,
+} from "@/features/editor/model/roomPolygonPointerDrawing";
+import {
   getSelectedRoomGeometrySelectionState,
   insertRoomGeometryEdgeVertex,
-  moveRoomGeometryHandleVertex,
   removeRoomGeometryHandleVertex,
   type RoomGeometryHandle,
 } from "@/features/editor/model/roomGeometryHandles";
+import {
+  beginRoomPolygonVertexDragging,
+  completeRoomPolygonVertexDragging,
+  updateRoomPolygonVertexDragging,
+  type RoomPolygonVertexDragSession,
+} from "@/features/editor/model/roomPolygonVertexDragging";
 import { hitTestRoomPolygon } from "@/features/editor/model/roomHitTesting";
 import {
   DEFAULT_EDITOR_FLOOR_SPACE,
@@ -201,6 +212,22 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
   // ── Local state ─────────────────────────────────────────────────────────────
   const [cursorPos,  setCursorPos]  = useState<EditorPoint | null>(null);
   const [shiftHeld,  setShiftHeld]  = useState(false);
+  const [roomPointerSession, setRoomPointerSession] =
+    useState<RoomPolygonPointerSession | null>(null);
+  const [vertexDragSession, setVertexDragSession] =
+    useState<RoomPolygonVertexDragSession | null>(null);
+
+  useEffect(() => {
+    if (activeTool !== "room") {
+      setRoomPointerSession(null);
+    }
+  }, [activeTool]);
+
+  useEffect(() => {
+    if (activeTool !== "select") {
+      setVertexDragSession(null);
+    }
+  }, [activeTool]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const isOpeningActive =
@@ -270,8 +297,25 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
 
   const handlePointerMove = useCallback((e: KonvaEventObject<PointerEvent>) => {
     const pos = e.target.getStage()?.getPointerPosition();
-    if (pos) setCursorPos({ x: pos.x, y: pos.y });
-  }, []);
+    if (!pos) return;
+
+    const nextPoint = { x: pos.x, y: pos.y };
+    setCursorPos(nextPoint);
+
+    const update = updateRoomPolygonPointerDrawing(
+      {
+        activeTool,
+        isDrawing,
+        draftPoints,
+        pointerSession: roomPointerSession,
+      },
+      nextPoint,
+    );
+
+    if (update.handled) {
+      setRoomPointerSession(update.state.pointerSession);
+    }
+  }, [activeTool, draftPoints, isDrawing, roomPointerSession]);
 
   const handlePointerLeave = useCallback(() => setCursorPos(null), []);
 
@@ -288,9 +332,20 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
       : { x: raw.x, y: raw.y };
 
     if (activeTool === "room") {
-      if (e.evt.detail === 2 && draftPoints.length >= 3) { commitDraft(); return; }
-      if (shouldCommitNearClose(pos)) { commitDraft(); return; }
-      addDraftPoint(pos);
+      setCursorPos(pos);
+      const begin = beginRoomPolygonPointerDrawing(
+        {
+          activeTool,
+          isDrawing,
+          draftPoints,
+          pointerSession: roomPointerSession,
+        },
+        pos,
+      );
+
+      if (begin.handled) {
+        setRoomPointerSession(begin.state.pointerSession);
+      }
       return;
     }
 
@@ -317,26 +372,142 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
       }
     }
   }, [activeTool, shiftHeld, draftPoints, addDraftPoint, commitDraft,
-      activeFloorId, floor, addOpening, selectRoom, isOpeningActive, shouldCommitNearClose]);
+      activeFloorId, floor, addOpening, selectRoom, isOpeningActive, shouldCommitNearClose,
+      isDrawing, roomPointerSession]);
 
-  const handleRoomVertexDrag = useCallback((
+  const handleStagePointerUp = useCallback((e: KonvaEventObject<PointerEvent>) => {
+    if (activeTool !== "room") {
+      return;
+    }
+
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const raw = stage.getPointerPosition();
+    if (!raw) return;
+
+    const last = draftPoints.length > 0 ? draftPoints[draftPoints.length - 1] : null;
+    const pos: EditorPoint = (shiftHeld && last)
+      ? applySnap(raw, last)
+      : { x: raw.x, y: raw.y };
+
+    setCursorPos(pos);
+
+    const completion = completeRoomPolygonPointerDrawing(
+      {
+        activeTool,
+        isDrawing,
+        draftPoints,
+        pointerSession: roomPointerSession,
+      },
+      pos,
+      ROOM_DRAFT_CLOSE_THRESHOLD,
+    );
+
+    if (!completion.handled) {
+      return;
+    }
+
+    setRoomPointerSession(completion.state.pointerSession);
+
+    if (completion.completed) {
+      commitDraft();
+      return;
+    }
+
+    if (completion.placementPoint) {
+      addDraftPoint(completion.placementPoint);
+    }
+  }, [
+    activeTool,
+    addDraftPoint,
+    commitDraft,
+    draftPoints,
+    isDrawing,
+    roomPointerSession,
+    shiftHeld,
+  ]);
+
+  const handleRoomVertexDragStart = useCallback((
     handle: RoomGeometryHandle,
     point: EditorPoint,
   ) => {
-    if (!activeFloorId || !selectedRoom) return;
-
-    const nextPolygon = moveRoomGeometryHandleVertex(
-      selectedRoom,
+    const begin = beginRoomPolygonVertexDragging(
+      {
+        activeTool,
+        activeFloorId,
+        selectedRoom,
+        dragSession: vertexDragSession,
+      },
       handle,
       point,
     );
 
-    if (nextPolygon === null) return;
+    if (!begin.handled) {
+      return;
+    }
 
-    updateRoom(activeFloorId, selectedRoom.roomId, {
-      roomPolygon: nextPolygon,
-    });
-  }, [activeFloorId, selectedRoom, updateRoom]);
+    setVertexDragSession(begin.state.dragSession);
+  }, [activeFloorId, activeTool, selectedRoom, vertexDragSession]);
+
+  const handleRoomVertexDrag = useCallback((
+    handle: RoomGeometryHandle,
+    point: EditorPoint,
+  ): EditorPoint | null => {
+    const update = updateRoomPolygonVertexDragging(
+      {
+        activeTool,
+        activeFloorId,
+        selectedRoom,
+        dragSession: vertexDragSession,
+      },
+      point,
+    );
+
+    if (!update.handled) {
+      return null;
+    }
+
+    setVertexDragSession(update.state.dragSession);
+
+    if (update.roomUpdate) {
+      updateRoom(update.roomUpdate.floorId, update.roomUpdate.roomId, {
+        roomPolygon: update.roomUpdate.roomPolygon,
+      });
+      return point;
+    }
+
+    return update.state.dragSession?.committedPoint ?? handle.position;
+  }, [activeFloorId, activeTool, selectedRoom, updateRoom, vertexDragSession]);
+
+  const handleRoomVertexDragEnd = useCallback((
+    handle: RoomGeometryHandle,
+    point: EditorPoint,
+  ): EditorPoint | null => {
+    const completion = completeRoomPolygonVertexDragging(
+      {
+        activeTool,
+        activeFloorId,
+        selectedRoom,
+        dragSession: vertexDragSession,
+      },
+      point,
+    );
+
+    if (!completion.handled) {
+      return null;
+    }
+
+    setVertexDragSession(null);
+
+    if (completion.roomUpdate) {
+      updateRoom(completion.roomUpdate.floorId, completion.roomUpdate.roomId, {
+        roomPolygon: completion.roomUpdate.roomPolygon,
+      });
+      return point;
+    }
+
+    return vertexDragSession?.committedPoint ?? handle.position;
+  }, [activeFloorId, activeTool, selectedRoom, updateRoom, vertexDragSession]);
 
   const handleSelectedRoomDragDelta = useCallback((
     roomId: string,
@@ -421,6 +592,7 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
       width={width}
       height={height}
       onPointerDown={handleStagePointerDown}
+      onPointerUp={handleStagePointerUp}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       style={{ cursor }}
@@ -618,21 +790,36 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
                   e.cancelBubble = true;
                   handleRoomVertexRemove(handle);
                 }}
-                onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "move"; }}
-                onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
-                onDragMove={e => {
+                onDragStart={e => {
                   e.cancelBubble = true;
-                  handleRoomVertexDrag(handle, {
+                  handleRoomVertexDragStart(handle, {
                     x: e.target.x(),
                     y: e.target.y(),
                   });
                 }}
-                onDragEnd={e => {
+                onMouseEnter={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = "move"; }}
+                onMouseLeave={e => { const s = e.target.getStage(); if (s) s.container().style.cursor = cursor; }}
+                onDragMove={e => {
                   e.cancelBubble = true;
-                  handleRoomVertexDrag(handle, {
+                  const resolvedPoint = handleRoomVertexDrag(handle, {
                     x: e.target.x(),
                     y: e.target.y(),
                   });
+
+                  if (resolvedPoint) {
+                    e.target.position(resolvedPoint);
+                  }
+                }}
+                onDragEnd={e => {
+                  e.cancelBubble = true;
+                  const resolvedPoint = handleRoomVertexDragEnd(handle, {
+                    x: e.target.x(),
+                    y: e.target.y(),
+                  });
+
+                  if (resolvedPoint) {
+                    e.target.position(resolvedPoint);
+                  }
                 }}
               />
             ))}

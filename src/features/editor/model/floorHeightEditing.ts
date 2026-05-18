@@ -29,3 +29,16 @@ export function applyValidatedFloorHeightChange(
     floorHeight: result.value,
   });
 }
+
+export function applyValidatedSelectedFloorHeightChange(
+  project: EditorProject,
+  floorHeight: number,
+): EditorProject {
+  const activeFloorId = project.viewState.activeFloorId;
+
+  if (activeFloorId === null) {
+    throw new Error("Cannot update floor height without an active floor.");
+  }
+
+  return applyValidatedFloorHeightChange(project, activeFloorId, floorHeight);
+}

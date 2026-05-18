@@ -6,6 +6,7 @@ import {
   type FloorPlanImageStorage,
 } from "./floor-plan-image-storage.ts";
 import { retrieveFloorPlanImageAsset } from "./retrieve-floor-plan-image-asset.ts";
+import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
 
 class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
   private readonly entries = new Map<string, string>();
@@ -25,9 +26,7 @@ test("retrieves stored floor plan image metadata and content by stable asset ref
     {
       projectId: "project-alpha",
       floorId: "floor-2",
-      file: new File(["second-floor-binary-image"], "second-floor.png", {
-        type: "image/png",
-      }),
+      file: createPngTestFile("second-floor.png"),
     },
     storage,
   );

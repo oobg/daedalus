@@ -1,4 +1,4 @@
-import type { EditorFloor } from "../../domain/editor-state.ts";
+import type { RenderSceneFloor } from "../renderer/index.ts";
 
 export interface FloorGuideSvgExportOptions {
   width?: number;
@@ -9,7 +9,7 @@ const DEFAULT_EXPORT_WIDTH = 800;
 const DEFAULT_EXPORT_HEIGHT = 600;
 
 export function buildFloorGuideSvgExport(
-  floor: EditorFloor,
+  floor: RenderSceneFloor,
   options: FloorGuideSvgExportOptions = {},
 ): string {
   const width = options.width ?? DEFAULT_EXPORT_WIDTH;
@@ -22,7 +22,7 @@ export function buildFloorGuideSvgExport(
 
   const paths = floor.rooms.map((room) => {
     const points =
-      room.roomPolygon
+      room.polygon
         .map((point, index) => (
           `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`
         ))

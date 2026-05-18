@@ -9,6 +9,7 @@ import {
   getFloorVerticalOffset,
   parseFloorHeightInput,
   normalizeFloor,
+  resolveFloorBaseElevations,
   resolveFloorVerticalPlacements,
   serializeFloor,
   updateFloorHeight,
@@ -49,6 +50,38 @@ test("createFloor preserves an explicit height", () => {
   );
 });
 
+test("createFloor supports multiple floor objects with different height values", () => {
+  const floors = [
+    createFloor({
+      id: "floor-ground",
+      name: "Ground Floor",
+      height: 3.2,
+    }),
+    createFloor({
+      id: "floor-second",
+      name: "Second Floor",
+      height: 4.6,
+    }),
+    createFloor({
+      id: "floor-third",
+      name: "Third Floor",
+      height: 2.9,
+    }),
+  ];
+
+  assert.deepEqual(
+    floors.map((floor) => ({
+      id: floor.id,
+      height: floor.height,
+    })),
+    [
+      { id: "floor-ground", height: 3.2 },
+      { id: "floor-second", height: 4.6 },
+      { id: "floor-third", height: 2.9 },
+    ],
+  );
+});
+
 test("createFloor rejects non-positive or non-finite heights", () => {
   const invalidHeights = [0, -1, Number.NaN, Number.POSITIVE_INFINITY];
 
@@ -60,7 +93,7 @@ test("createFloor rejects non-positive or non-finite heights", () => {
           name: "Invalid Floor",
           height,
         }),
-      /Floor height must be a number greater than 0\./,
+      /Floor height must be (greater than 0|a finite number)\./,
     );
   }
 });
@@ -239,6 +272,50 @@ test("getFloorVerticalOffset derives per-floor offsets from stored heights", () 
   assert.equal(getFloorVerticalOffset(floors, "floor-3"), 7.75);
 });
 
+test("resolveFloorBaseElevations derives each floor base elevation from the ordered configured heights", () => {
+  const floors = [
+    normalizeFloor({
+      id: "floor-lobby",
+      name: "Lobby",
+      height: 4.1,
+    }),
+    normalizeFloor({
+      id: "floor-office",
+      name: "Office",
+      height: 3.35,
+    }),
+    normalizeFloor({
+      id: "floor-mezzanine",
+      name: "Mezzanine",
+      height: 2.2,
+    }),
+    normalizeFloor({
+      id: "floor-roof",
+      name: "Roof Access",
+      height: 3.9,
+    }),
+  ];
+
+  assert.deepEqual(resolveFloorBaseElevations(floors), [
+    {
+      floorId: "floor-lobby",
+      baseElevation: 0,
+    },
+    {
+      floorId: "floor-office",
+      baseElevation: 4.1,
+    },
+    {
+      floorId: "floor-mezzanine",
+      baseElevation: 7.45,
+    },
+    {
+      floorId: "floor-roof",
+      baseElevation: 9.65,
+    },
+  ]);
+});
+
 test("resolveFloorVerticalPlacements returns cumulative offsets for viewer and export", () => {
   const floors = [
     normalizeFloor({
@@ -279,22 +356,61 @@ test("resolveFloorVerticalPlacements returns cumulative offsets for viewer and e
 
 test("parseFloorHeightInput rejects invalid height values", () => {
   const invalidInputs = [
-    "",
-    "abc",
-    "3m",
-    "0",
-    -2,
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
+    {
+      input: "",
+      error: {
+        code: "empty_floor_height",
+        message: "Floor height is required.",
+      },
+    },
+    {
+      input: "abc",
+      error: {
+        code: "malformed_floor_height",
+        message: "Floor height must be numeric.",
+      },
+    },
+    {
+      input: "3m",
+      error: {
+        code: "malformed_floor_height",
+        message: "Floor height must be numeric.",
+      },
+    },
+    {
+      input: "0",
+      error: {
+        code: "non_positive_floor_height",
+        message: "Floor height must be greater than 0.",
+      },
+    },
+    {
+      input: -2,
+      error: {
+        code: "non_positive_floor_height",
+        message: "Floor height must be greater than 0.",
+      },
+    },
+    {
+      input: Number.NaN,
+      error: {
+        code: "non_finite_floor_height",
+        message: "Floor height must be a finite number.",
+      },
+    },
+    {
+      input: Number.POSITIVE_INFINITY,
+      error: {
+        code: "non_finite_floor_height",
+        message: "Floor height must be a finite number.",
+      },
+    },
   ];
 
-  for (const input of invalidInputs) {
+  for (const { input, error } of invalidInputs) {
     const result = parseFloorHeightInput(input);
 
-    assert.deepEqual(result, {
-      code: "invalid_floor_height",
-      message: "Floor height must be a number greater than 0.",
-    });
+    assert.deepEqual(result, error);
   }
 });
 
@@ -317,8 +433,8 @@ test("updateFloorHeight returns a validation error for invalid height input", ()
   assert.deepEqual(result, {
     ok: false,
     error: {
-      code: "invalid_floor_height",
-      message: "Floor height must be a number greater than 0.",
+      code: "non_positive_floor_height",
+      message: "Floor height must be greater than 0.",
     },
   });
   assert.equal(floors[0].height, 3);

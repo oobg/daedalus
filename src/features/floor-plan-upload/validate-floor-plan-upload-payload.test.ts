@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { validateFloorPlanUploadPayload } from "./validate-floor-plan-upload-payload.ts";
+import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
 
-test("accepts a valid uploaded floor payload before save", () => {
-  const upload = new File(["binary"], "level-1.png", { type: "image/png" });
+test("accepts a valid uploaded floor payload before save", async () => {
+  const upload = createPngTestFile("level-1.png");
 
-  const result = validateFloorPlanUploadPayload({
+  const result = await validateFloorPlanUploadPayload({
     projectId: "  project-alpha  ",
     floorId: " floor-1 ",
     upload,

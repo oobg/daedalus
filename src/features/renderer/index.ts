@@ -1,8 +1,19 @@
 export {
   EDITOR_STATE_PROJECTION_VERSION,
+  type DeepReadonly,
   RENDERER_CONTRACT_FIELDS,
   type ReadonlyEditorStateProjection,
   type RendererConsumer,
+  type ReadonlyRendererSnapshotFloor,
+  type ReadonlyRendererSnapshotLabelPosition,
+  type ReadonlyRendererSnapshotOpening,
+  type ReadonlyRendererSnapshotPoint,
+  type ReadonlyRendererSnapshotProject,
+  type ReadonlyRendererSnapshotRoom,
+  type ReadonlyRendererSnapshotSharedBoundary,
+  type ReadonlyRendererSnapshotVerticalConnector,
+  type ReadonlyRendererSnapshotViewState,
+  type ReadonlyRendererSnapshotWallSegment,
   type RendererSnapshotFloor,
   type RendererSnapshotLabelPosition,
   type RendererSnapshotOpening,
@@ -20,6 +31,12 @@ export {
   type RenderSceneOpening,
   type RenderScenePoint,
   type RenderSceneRoom,
+  type ReadonlyRenderAssetMapping,
+  type RenderAssetFloorMetadata,
+  type RenderAssetOpeningMetadata,
+  type RenderAssetProjectMetadata,
+  type RenderAssetRoomMetadata,
+  type RenderAssetVerticalConnectorMetadata,
   type RenderSceneVerticalConnector,
   type RenderSceneWallSegment,
   type SerializedEditorStateProjection,
@@ -33,8 +50,17 @@ export {
 export { resolveRenderSceneRoomLayers } from "./render-scene-layering.ts";
 export { adaptProjectSnapshotToRenderScene } from "./renderer-input-adapter.ts";
 export {
+  adaptSnapshotFloorToRenderSceneFloor,
+  type RenderSceneFloorPrimitiveOptions,
+} from "./floor-render-primitives.ts";
+export {
   createReadonlyEditorStateProjection,
   projectEditorStateForRenderer,
   serializeEditorStateProjection,
   type EditorStateProjectionOptions,
 } from "./editor-state-projection.ts";
+export { adaptReadonlyEditorStateProjectionToRenderScene } from "./renderer-projection-adapter.ts";
+export {
+  mapProjectSnapshotToRenderAssetMetadata,
+  mapReadonlyEditorStateProjectionToRenderAssetMetadata,
+} from "./render-asset-mapping.ts";

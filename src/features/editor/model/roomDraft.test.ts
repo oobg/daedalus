@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   appendRoomDraftPoint,
   collectRoomDraftPoints,
+  createRoomPolygonFromOrderedPoints,
   createRoomDraftPolygon,
   deleteRoomPolygonVertex,
   finalizeEditorRoomDraft,
@@ -59,6 +60,46 @@ test('collectRoomDraftPoints builds the same ordered polygon from a sequential p
       { x: 5, y: 1 },
       { x: 5, y: 4 },
       { x: 1, y: 4 },
+    ],
+  });
+});
+
+test('createRoomPolygonFromOrderedPoints converts ordered point input into a closed room polygon model', () => {
+  const polygon = createRoomPolygonFromOrderedPoints('room-2b', [
+    { x: 1, y: 1 },
+    { x: 5, y: 1 },
+    { x: 5, y: 4 },
+    { x: 1, y: 4 },
+  ]);
+
+  assert.deepEqual(polygon, {
+    roomId: 'room-2b',
+    points: [
+      { x: 1, y: 1 },
+      { x: 5, y: 1 },
+      { x: 5, y: 4 },
+      { x: 1, y: 4 },
+      { x: 1, y: 1 },
+    ],
+  });
+});
+
+test('createRoomPolygonFromOrderedPoints returns a normalized polygon model for valid clockwise input', () => {
+  const polygon = createRoomPolygonFromOrderedPoints('room-2c', [
+    { x: 8, y: 2 },
+    { x: 8, y: 6 },
+    { x: 2, y: 6 },
+    { x: 2, y: 2 },
+  ]);
+
+  assert.deepEqual(polygon, {
+    roomId: 'room-2c',
+    points: [
+      { x: 2, y: 2 },
+      { x: 8, y: 2 },
+      { x: 8, y: 6 },
+      { x: 2, y: 6 },
+      { x: 2, y: 2 },
     ],
   });
 });

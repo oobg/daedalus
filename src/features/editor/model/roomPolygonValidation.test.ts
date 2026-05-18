@@ -17,6 +17,47 @@ test('validateRoomPolygon accepts a simple closed room polygon', () => {
   });
 });
 
+test('validateRoomPolygon rejects polygons with fewer than three points before closure', () => {
+  const result = validateRoomPolygon([
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 0, y: 0 },
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'polygon_requires_three_points',
+  });
+});
+
+test('validateRoomPolygon rejects unclosed polygons', () => {
+  const result = validateRoomPolygon([
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 6 },
+    { x: 0, y: 6 },
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'polygon_must_be_closed',
+  });
+});
+
+test('validateRoomPolygon rejects closed polygons with fewer than three distinct vertices', () => {
+  const result = validateRoomPolygon([
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 0 },
+    { x: 0, y: 0 },
+  ]);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'polygon_requires_three_distinct_vertices',
+  });
+});
+
 test('validateRoomPolygon rejects a self-intersecting room polygon', () => {
   const result = validateRoomPolygon([
     { x: 0, y: 0 },

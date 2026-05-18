@@ -6,6 +6,7 @@ import {
   loadStoredFloorPlanImage,
   type FloorPlanImageStorage,
 } from "./floor-plan-image-storage.ts";
+import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
 
 class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
   private readonly entries = new Map<string, string>();
@@ -21,9 +22,7 @@ class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
 
 test("creates a floor plan image asset from an uploaded file and persists it with a stable reference", async () => {
   const storage = new InMemoryFloorPlanImageStorage();
-  const upload = new File(["binary-image-data"], "ground-floor.png", {
-    type: "image/png",
-  });
+  const upload = createPngTestFile("ground-floor.png");
 
   const firstAsset = await createFloorPlanImageAsset(
     {

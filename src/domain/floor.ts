@@ -32,6 +32,11 @@ export interface FloorVerticalPlacement {
   height: number;
 }
 
+export interface FloorBaseElevation {
+  floorId: string;
+  baseElevation: number;
+}
+
 export type FloorHeightInput = number | string;
 
 export type UpdateFloorHeightResult =
@@ -114,22 +119,38 @@ export function getFloorVerticalOffset(
   throw new Error(`Floor "${floorId}" was not found.`);
 }
 
+export function resolveFloorBaseElevations(
+  floors: readonly Floor[],
+): FloorBaseElevation[] {
+  let baseElevation = 0;
+
+  return floors.map((floor) => {
+    const resolvedBaseElevation = {
+      floorId: floor.id,
+      baseElevation: roundFloorElevation(baseElevation),
+    };
+
+    baseElevation += floor.height;
+
+    return resolvedBaseElevation;
+  });
+}
+
 export function resolveFloorVerticalPlacements(
   floors: readonly Floor[],
 ): FloorVerticalPlacement[] {
-  let offset = 0;
+  const baseElevationsByFloorId = new Map(
+    resolveFloorBaseElevations(floors).map((placement) => [
+      placement.floorId,
+      placement.baseElevation,
+    ]),
+  );
 
-  return floors.map((floor) => {
-    const placement = {
-      floorId: floor.id,
-      offset,
-      height: floor.height,
-    };
-
-    offset += floor.height;
-
-    return placement;
-  });
+  return floors.map((floor) => ({
+    floorId: floor.id,
+    offset: baseElevationsByFloorId.get(floor.id) ?? 0,
+    height: floor.height,
+  }));
 }
 
 export function updateFloorHeight(
@@ -201,4 +222,8 @@ export function assignFloorReferenceImage(
     floors: nextFloors,
     floor: updatedFloor,
   };
+}
+
+function roundFloorElevation(value: number): number {
+  return Number(value.toFixed(6));
 }

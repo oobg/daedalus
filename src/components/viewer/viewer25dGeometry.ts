@@ -1,4 +1,5 @@
 import { createOuterWallCornerProfile } from "../../features/viewer/wall-corner-profile.ts";
+import { resolveFloorVerticalPlacements } from "../../domain/floor.ts";
 
 export const DEFAULT_WALL_HEIGHT_SCALE = 0.3;
 export const DEFAULT_FLOOR_LAYER_THICKNESS_SCALE = 0.003;
@@ -162,17 +163,17 @@ export function resolveRoomLayerElevations(
 export function resolveViewer25DFloorPlacements(
   floors: readonly Viewer25DFloorPlacementInput[],
 ): Viewer25DFloorPlacement[] {
-  let verticalOffset = 0;
-
-  return floors.map((floor) => {
-    const placement = {
-      floorId: floor.floorId,
-      verticalOffset,
-    };
-    verticalOffset += floor.floorHeight;
-
-    return placement;
-  });
+  return resolveFloorVerticalPlacements(
+    floors.map((floor) => ({
+      id: floor.floorId,
+      name: floor.floorId,
+      height: floor.floorHeight,
+      referenceImage: null,
+    })),
+  ).map((placement) => ({
+    floorId: placement.floorId,
+    verticalOffset: placement.offset,
+  }));
 }
 
 export function resolveViewer25DFloorRenderPlacements(

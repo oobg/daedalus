@@ -32,9 +32,9 @@ export type FloorPlanUploadPayloadValidationResult =
       message: string;
     };
 
-export function validateFloorPlanUploadPayload(
+export async function validateFloorPlanUploadPayload(
   payload: FloorPlanUploadPayload,
-): FloorPlanUploadPayloadValidationResult {
+): Promise<FloorPlanUploadPayloadValidationResult> {
   const projectId = payload.projectId.trim();
 
   if (projectId.length === 0) {
@@ -55,7 +55,7 @@ export function validateFloorPlanUploadPayload(
     };
   }
 
-  const uploadValidation = validateFloorPlanImageUpload(payload.upload);
+  const uploadValidation = await validateFloorPlanImageUpload(payload.upload);
 
   if (!uploadValidation.ok) {
     return uploadValidation;

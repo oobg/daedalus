@@ -6,14 +6,15 @@ import {
 } from "./floor-plan-image-storage.ts";
 
 export interface ResolveFloorReferenceImageSourceInput {
-  floor: EditorFloor | null;
+  floors: readonly EditorFloor[];
+  selectedFloorId: string | null;
 }
 
 export function resolveFloorReferenceImageSource(
   input: ResolveFloorReferenceImageSourceInput,
   storage: FloorPlanImageStorage,
 ): string | null {
-  const referenceImage = input.floor?.referenceImage ?? null;
+  const referenceImage = resolveFloorReferenceImageAssetRef(input);
 
   if (referenceImage == null || referenceImage.trim() === "") {
     return null;
@@ -34,4 +35,18 @@ export function resolveFloorReferenceImageSource(
 
 function isInlineImageSource(value: string): boolean {
   return value.startsWith("data:image/") || value.startsWith("blob:");
+}
+
+function resolveFloorReferenceImageAssetRef(
+  input: ResolveFloorReferenceImageSourceInput,
+): string | null {
+  if (input.selectedFloorId == null) {
+    return null;
+  }
+
+  const floor = input.floors.find(
+    ({ floorId }) => floorId === input.selectedFloorId,
+  );
+
+  return floor?.referenceImage ?? null;
 }

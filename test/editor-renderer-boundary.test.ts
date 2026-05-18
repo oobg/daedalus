@@ -19,6 +19,10 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
+const rendererModuleRoot = path.resolve(
+  projectRoot,
+  "src/features/renderer",
+);
 
 const editorDomainEntrypoints = [
   path.resolve(projectRoot, "src/domain/editor-state.ts"),
@@ -37,6 +41,21 @@ const disallowedRendererImplementationModules = new Set([
 
 const importSpecifierPattern =
   /(?:import|export)\s+(?:type\s+)?(?:[^"'`]*?\s+from\s+)?["'`]([^"'`]+)["'`]/g;
+const namedBindingPattern =
+  /(?:import|export)\s*{([^}]*)}\s*from\s*["'`]([^"'`]+)["'`]/g;
+const namespaceBindingPattern =
+  /import\s+\*\s+as\s+\w+\s+from\s+["'`]([^"'`]+)["'`]/g;
+const forbiddenRendererMutationSymbols = new Set([
+  "addEditorRoom",
+  "updateEditorRoom",
+  "removeEditorRoom",
+  "createEditorRoomPolygonMutationService",
+  "createRoomPolygonSource",
+  "replaceRoomPolygonSource",
+]);
+const forbiddenRendererMutationModulePaths = new Set([
+  path.resolve(projectRoot, "src/domain/editor-room-polygon-mutation-service.ts"),
+]);
 
 type RendererSceneAdapter = (
   project: RendererSnapshotProject,
@@ -131,6 +150,23 @@ test("editor-facing projection code can swap renderer adapters without caller ch
                   y: room.labelPosition.y,
                 },
           bounds: null,
+          layers: {
+            floor: {
+              elementClass: "floor",
+              order: 0,
+              baseElevation: 0,
+            },
+            furniture: {
+              elementClass: "furniture",
+              order: 1,
+              baseElevation: 0,
+            },
+            wall: {
+              elementClass: "wall",
+              order: 2,
+              baseElevation: 0,
+            },
+          },
           walls: [],
           openings: [],
         })),
@@ -146,6 +182,15 @@ test("editor-facing projection code can swap renderer adapters without caller ch
     renderWithAdapter(project, alternateAdapter),
     "project-boundary:floor-1:1:48",
   );
+});
+
+test("renderer modules cannot bypass editor-domain room polygon mutation boundaries", () => {
+  const rendererModules = collectTypeScriptModules(rendererModuleRoot);
+
+  for (const modulePath of rendererModules) {
+    assertNoForbiddenRendererMutationImport(modulePath);
+    assertNoForbiddenRendererMutationCall(modulePath);
+  }
 });
 
 function assertRendererDependencyBoundary(
@@ -193,6 +238,85 @@ function assertRendererDependencyBoundary(
 
 function readImportSpecifiers(source: string): string[] {
   return [...source.matchAll(importSpecifierPattern)].map((match) => match[1]);
+}
+
+function assertNoForbiddenRendererMutationImport(modulePath: string): void {
+  const source = fs.readFileSync(modulePath, "utf8");
+
+  for (const match of source.matchAll(namedBindingPattern)) {
+    const [, namedBindingsSource, specifier] = match;
+
+    if (!specifier.startsWith(".")) {
+      continue;
+    }
+
+    const resolvedModulePath = resolveLocalModuleSpecifier(modulePath, specifier);
+    const importedBindings = parseNamedBindings(namedBindingsSource);
+
+    for (const binding of importedBindings) {
+      assert.ok(
+        !forbiddenRendererMutationSymbols.has(binding),
+        `Renderer module imported editor mutation binding "${binding}" from ${toProjectRelativePath(resolvedModulePath)}`,
+      );
+    }
+  }
+
+  for (const match of source.matchAll(namespaceBindingPattern)) {
+    const [, specifier] = match;
+
+    if (!specifier.startsWith(".")) {
+      continue;
+    }
+
+    const resolvedModulePath = resolveLocalModuleSpecifier(modulePath, specifier);
+
+    assert.ok(
+      !forbiddenRendererMutationModulePaths.has(resolvedModulePath),
+      `Renderer module imported editor mutation service namespace from ${toProjectRelativePath(resolvedModulePath)}`,
+    );
+  }
+}
+
+function assertNoForbiddenRendererMutationCall(modulePath: string): void {
+  const source = fs.readFileSync(modulePath, "utf8");
+
+  for (const symbol of forbiddenRendererMutationSymbols) {
+    const callPattern = new RegExp(`\\b${symbol}\\s*\\(`, "g");
+    assert.equal(
+      callPattern.test(source),
+      false,
+      `Renderer module called editor mutation function "${symbol}" in ${toProjectRelativePath(modulePath)}`,
+    );
+  }
+}
+
+function parseNamedBindings(namedBindingsSource: string): string[] {
+  return namedBindingsSource
+    .split(",")
+    .map((binding) => binding.trim())
+    .filter(Boolean)
+    .map((binding) => binding.replace(/^type\s+/, ""))
+    .map((binding) => binding.split(/\s+as\s+/)[0]?.trim() ?? "")
+    .filter(Boolean);
+}
+
+function collectTypeScriptModules(directoryPath: string): string[] {
+  const collectedModules: string[] = [];
+
+  for (const dirent of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+    const entryPath = path.resolve(directoryPath, dirent.name);
+
+    if (dirent.isDirectory()) {
+      collectedModules.push(...collectTypeScriptModules(entryPath));
+      continue;
+    }
+
+    if (dirent.isFile() && entryPath.endsWith(".ts")) {
+      collectedModules.push(entryPath);
+    }
+  }
+
+  return collectedModules.sort();
 }
 
 function resolveLocalModuleSpecifier(

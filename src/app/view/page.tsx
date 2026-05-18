@@ -6,6 +6,7 @@ import { Grid2x2, FolderOpen, X } from "lucide-react";
 import type { EditorFloor, EditorPoint } from "@/domain/editor-state";
 import { Button } from "@/components/ui/button";
 import { formatViewerFloorMetadata } from "@/features/viewer/viewer-floor-metadata";
+import { validateUploadedProjectFile } from "@/features/project-export/validate-uploaded-project-file";
 
 const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
 
@@ -46,7 +47,14 @@ export default function ViewPage() {
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const validation = validateUploadedProjectFile(file);
+
+    if (!validation.ok) {
+      setError(validation.message);
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = ev => {
       const raw    = ev.target?.result as string;
@@ -54,7 +62,7 @@ export default function ViewPage() {
       if (parsed) { setProject(parsed); setError(null); }
       else setError("올바른 building-guide.json 파일이 아닙니다.");
     };
-    reader.readAsText(file);
+    reader.readAsText(validation.file);
     e.target.value = "";
   }, []);
 

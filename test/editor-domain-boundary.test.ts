@@ -10,6 +10,7 @@ const projectRoot = path.resolve(__dirname, "..");
 
 const editorDomainEntrypoints = [
   path.resolve(projectRoot, "src/domain/editor-state.ts"),
+  path.resolve(projectRoot, "src/domain/editor-room-polygon-mutation-service.ts"),
   path.resolve(projectRoot, "src/domain/floor.ts"),
 ] as const;
 

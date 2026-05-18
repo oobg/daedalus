@@ -237,6 +237,38 @@ test('moveRoomGeometryHandleVertex returns a polygon with only the dragged verte
   assert.deepEqual(room.roomPolygon[2], { x: 80, y: 60 });
 });
 
+test('moveRoomGeometryHandleVertex preserves open-polygon invariants by rejecting invalid moves', () => {
+  const room = {
+    roomId: 'room-a',
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 80, y: 0 },
+      { x: 80, y: 80 },
+      { x: 0, y: 80 },
+    ],
+  };
+
+  assert.equal(
+    moveRoomGeometryHandleVertex(
+      room,
+      {
+        id: 'room-a:vertex:2',
+        roomId: 'room-a',
+        vertexIndex: 2,
+        position: { x: 80, y: 80 },
+      },
+      { x: -20, y: 20 },
+    ),
+    null,
+  );
+  assert.deepEqual(room.roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 80, y: 0 },
+    { x: 80, y: 80 },
+    { x: 0, y: 80 },
+  ]);
+});
+
 test('moveRoomGeometryHandleVertex ignores handles that do not belong to the room polygon', () => {
   const room = {
     roomId: 'room-a',

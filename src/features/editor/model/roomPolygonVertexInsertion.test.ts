@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   insertRoomPolygonVertexAt,
+  insertRoomPolygonVertexWithInvariantValidation,
   type InsertRoomPolygonVertexTarget,
 } from './roomPolygonVertexInsertion.ts';
 
@@ -42,6 +43,73 @@ test('insertRoomPolygonVertexAt inserts after the specified vertex index in a cl
     { x: 8, y: 4 },
     { x: 0, y: 4 },
     { x: -2, y: 2 },
+    { x: 0, y: 0 },
+  ]);
+});
+
+test('insertRoomPolygonVertexWithInvariantValidation rejects inserts that self-intersect the existing room polygon', () => {
+  const points = [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 8 },
+    { x: 0, y: 8 },
+    { x: 0, y: 0 },
+  ] as const;
+
+  const result = insertRoomPolygonVertexWithInvariantValidation(
+    points,
+    { vertexIndex: 1 },
+    { x: -2, y: 2 },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'invalid_polygon',
+    validation: {
+      code: 'polygon_self_intersects',
+      message: 'A room polygon must not self-intersect.',
+    },
+  });
+  assert.deepEqual(points, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 8 },
+    { x: 0, y: 8 },
+    { x: 0, y: 0 },
+  ]);
+});
+
+test('insertRoomPolygonVertexWithInvariantValidation returns a validated inserted polygon point set for an existing room polygon', () => {
+  const points = [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
+    { x: 0, y: 0 },
+  ] as const;
+
+  const result = insertRoomPolygonVertexWithInvariantValidation(
+    points,
+    { vertexIndex: 1 },
+    { x: 10, y: 2 },
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    points: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 10, y: 2 },
+      { x: 8, y: 4 },
+      { x: 0, y: 4 },
+      { x: 0, y: 0 },
+    ],
+  });
+  assert.deepEqual(points, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
     { x: 0, y: 0 },
   ]);
 });

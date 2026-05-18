@@ -1,3 +1,11 @@
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly (infer Item)[]
+    ? readonly DeepReadonly<Item>[]
+    : T extends object
+      ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+      : T;
+
 export interface RendererSnapshotPoint {
   x: number;
   y: number;
@@ -68,6 +76,24 @@ export interface RendererSnapshotProject {
   viewState: RendererSnapshotViewState;
 }
 
+export type ReadonlyRendererSnapshotPoint = DeepReadonly<RendererSnapshotPoint>;
+export type ReadonlyRendererSnapshotLabelPosition =
+  DeepReadonly<RendererSnapshotLabelPosition>;
+export type ReadonlyRendererSnapshotSharedBoundary =
+  DeepReadonly<RendererSnapshotSharedBoundary>;
+export type ReadonlyRendererSnapshotOpening =
+  DeepReadonly<RendererSnapshotOpening>;
+export type ReadonlyRendererSnapshotWallSegment =
+  DeepReadonly<RendererSnapshotWallSegment>;
+export type ReadonlyRendererSnapshotRoom = DeepReadonly<RendererSnapshotRoom>;
+export type ReadonlyRendererSnapshotVerticalConnector =
+  DeepReadonly<RendererSnapshotVerticalConnector>;
+export type ReadonlyRendererSnapshotFloor = DeepReadonly<RendererSnapshotFloor>;
+export type ReadonlyRendererSnapshotViewState =
+  DeepReadonly<RendererSnapshotViewState>;
+export type ReadonlyRendererSnapshotProject =
+  DeepReadonly<RendererSnapshotProject>;
+
 export const EDITOR_STATE_PROJECTION_VERSION = 1;
 
 export type RendererConsumer = "renderer" | "viewer";
@@ -76,7 +102,7 @@ export interface ReadonlyEditorStateProjection {
   projectionVersion: typeof EDITOR_STATE_PROJECTION_VERSION;
   projectedAt: string;
   consumers: readonly RendererConsumer[];
-  project: RendererSnapshotProject;
+  project: ReadonlyRendererSnapshotProject;
 }
 
 export interface SerializedEditorStateProjection {
@@ -175,6 +201,83 @@ export interface RenderSceneData {
   floors: readonly RenderSceneFloor[];
 }
 
+export interface RenderAssetLabelMetadata {
+  text: string;
+  position: RenderScenePoint;
+}
+
+export interface RenderAssetRoomMetadata {
+  assetId: string;
+  floorId: string;
+  roomId: string;
+  roomName: string;
+  area: number;
+  polygonVertexCount: number;
+  sharedBoundaryCount: number;
+  wallEdgeIds: readonly string[];
+  openingAssetIds: readonly string[];
+  bounds: RenderSceneBounds | null;
+  label: RenderAssetLabelMetadata | null;
+}
+
+export interface RenderAssetOpeningMetadata {
+  assetId: string;
+  floorId: string;
+  roomId: string;
+  openingId: string;
+  openingType: string;
+  attachedEdgeId: string;
+  edgeRelativePosition: number;
+  anchor: RenderScenePoint | null;
+}
+
+export interface RenderAssetVerticalConnectorMetadata {
+  assetId: string;
+  floorId: string;
+  connectorId: string;
+  connectorType: string;
+  roomId: string;
+  targetFloorId: string;
+  position: RenderScenePoint;
+}
+
+export interface RenderAssetFloorMetadata {
+  assetId: string;
+  floorId: string;
+  floorName: string;
+  floorHeight: number;
+  referenceImage: string | null;
+  isActive: boolean;
+  verticalOffset: number;
+  renderHeight: number | null;
+  renderVerticalOffset: number | null;
+  roomCount: number;
+  openingCount: number;
+  verticalConnectorCount: number;
+  roomAssetIds: readonly string[];
+  openingAssetIds: readonly string[];
+  verticalConnectorAssetIds: readonly string[];
+  bounds: RenderSceneBounds | null;
+}
+
+export interface RenderAssetProjectMetadata {
+  projectId: string;
+  projectName: string;
+  objectVersion: number;
+  defaultFloorId: string | null;
+  floors: readonly RenderAssetFloorMetadata[];
+  rooms: readonly RenderAssetRoomMetadata[];
+  openings: readonly RenderAssetOpeningMetadata[];
+  verticalConnectors: readonly RenderAssetVerticalConnectorMetadata[];
+}
+
+export interface ReadonlyRenderAssetMapping {
+  projectionVersion: number;
+  projectedAt: string;
+  consumers: readonly RendererConsumer[];
+  project: RenderAssetProjectMetadata;
+}
+
 export const RENDERER_CONTRACT_FIELDS = Object.freeze({
   snapshotProject: Object.freeze([
     "projectId",
@@ -242,6 +345,72 @@ export const RENDERER_CONTRACT_FIELDS = Object.freeze({
     "attachedEdgeId",
     "edgeRelativePosition",
     "anchor",
+  ]),
+  assetMapping: Object.freeze([
+    "projectionVersion",
+    "projectedAt",
+    "consumers",
+    "project",
+  ]),
+  assetProject: Object.freeze([
+    "projectId",
+    "projectName",
+    "objectVersion",
+    "defaultFloorId",
+    "floors",
+    "rooms",
+    "openings",
+    "verticalConnectors",
+  ]),
+  assetFloor: Object.freeze([
+    "assetId",
+    "floorId",
+    "floorName",
+    "floorHeight",
+    "referenceImage",
+    "isActive",
+    "verticalOffset",
+    "renderHeight",
+    "renderVerticalOffset",
+    "roomCount",
+    "openingCount",
+    "verticalConnectorCount",
+    "roomAssetIds",
+    "openingAssetIds",
+    "verticalConnectorAssetIds",
+    "bounds",
+  ]),
+  assetRoom: Object.freeze([
+    "assetId",
+    "floorId",
+    "roomId",
+    "roomName",
+    "area",
+    "polygonVertexCount",
+    "sharedBoundaryCount",
+    "wallEdgeIds",
+    "openingAssetIds",
+    "bounds",
+    "label",
+  ]),
+  assetOpening: Object.freeze([
+    "assetId",
+    "floorId",
+    "roomId",
+    "openingId",
+    "openingType",
+    "attachedEdgeId",
+    "edgeRelativePosition",
+    "anchor",
+  ]),
+  assetVerticalConnector: Object.freeze([
+    "assetId",
+    "floorId",
+    "connectorId",
+    "connectorType",
+    "roomId",
+    "targetFloorId",
+    "position",
   ]),
   editorStateProjection: Object.freeze([
     "projectionVersion",

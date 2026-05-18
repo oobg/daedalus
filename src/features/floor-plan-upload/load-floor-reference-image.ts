@@ -10,12 +10,28 @@ export interface LoadFloorReferenceImageInput {
   floorId: string;
 }
 
-export type FloorReferenceImageData = Readonly<StoredFloorPlanImageAsset>;
+export interface FloorReferenceImageData {
+  usage: "editing-reference";
+  editable: false;
+  sourceAsset: Readonly<StoredFloorPlanImageAsset>;
+}
+
+export type LoadFloorReferenceImageResult =
+  | {
+      ok: true;
+      code: "loaded";
+      image: FloorReferenceImageData;
+    }
+  | {
+      ok: false;
+      code: "missing_reference_image" | "missing_reference_image_asset";
+      message: string;
+    };
 
 export function loadFloorReferenceImage(
   input: LoadFloorReferenceImageInput,
   storage: FloorPlanImageStorage,
-): FloorReferenceImageData | null {
+): LoadFloorReferenceImageResult {
   const floor = input.floors.find(({ id }) => id === input.floorId);
 
   if (floor == null) {
@@ -23,16 +39,32 @@ export function loadFloorReferenceImage(
   }
 
   if (floor.referenceImage == null) {
-    return null;
+    return {
+      ok: false,
+      code: "missing_reference_image",
+      message: `Floor "${input.floorId}" has no associated reference image.`,
+    };
   }
 
   const asset = loadStoredFloorPlanImage(floor.referenceImage, storage);
 
   if (asset == null) {
-    return null;
+    return {
+      ok: false,
+      code: "missing_reference_image_asset",
+      message: `Floor "${input.floorId}" references a floor plan image asset that is unavailable in storage.`,
+    };
   }
 
   return Object.freeze({
-    ...asset,
+    ok: true,
+    code: "loaded",
+    image: Object.freeze({
+      usage: "editing-reference",
+      editable: false,
+      sourceAsset: Object.freeze({
+        ...asset,
+      }),
+    }),
   });
 }

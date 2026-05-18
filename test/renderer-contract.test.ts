@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   RENDERER_CONTRACT_FIELDS,
   adaptProjectSnapshotToRenderScene,
+  adaptReadonlyEditorStateProjectionToRenderScene,
   createRendererEntrypoint,
   renderProjectSnapshot,
   type RendererSnapshotProject,
@@ -12,6 +13,7 @@ import {
 
 test("renderer public API exposes the stable contract and adapter entrypoint", () => {
   assert.equal(typeof adaptProjectSnapshotToRenderScene, "function");
+  assert.equal(typeof adaptReadonlyEditorStateProjectionToRenderScene, "function");
   assert.equal(typeof createRendererEntrypoint, "function");
   assert.equal(typeof renderProjectSnapshot, "function");
   assert.deepEqual(RENDERER_CONTRACT_FIELDS.snapshotProject, [
@@ -83,6 +85,72 @@ test("renderer contract field lists cover the required snapshot and scene struct
     "attachedEdgeId",
     "edgeRelativePosition",
     "anchor",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetMapping, [
+    "projectionVersion",
+    "projectedAt",
+    "consumers",
+    "project",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetProject, [
+    "projectId",
+    "projectName",
+    "objectVersion",
+    "defaultFloorId",
+    "floors",
+    "rooms",
+    "openings",
+    "verticalConnectors",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetFloor, [
+    "assetId",
+    "floorId",
+    "floorName",
+    "floorHeight",
+    "referenceImage",
+    "isActive",
+    "verticalOffset",
+    "renderHeight",
+    "renderVerticalOffset",
+    "roomCount",
+    "openingCount",
+    "verticalConnectorCount",
+    "roomAssetIds",
+    "openingAssetIds",
+    "verticalConnectorAssetIds",
+    "bounds",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetRoom, [
+    "assetId",
+    "floorId",
+    "roomId",
+    "roomName",
+    "area",
+    "polygonVertexCount",
+    "sharedBoundaryCount",
+    "wallEdgeIds",
+    "openingAssetIds",
+    "bounds",
+    "label",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetOpening, [
+    "assetId",
+    "floorId",
+    "roomId",
+    "openingId",
+    "openingType",
+    "attachedEdgeId",
+    "edgeRelativePosition",
+    "anchor",
+  ]);
+  assert.deepEqual(RENDERER_CONTRACT_FIELDS.assetVerticalConnector, [
+    "assetId",
+    "floorId",
+    "connectorId",
+    "connectorType",
+    "roomId",
+    "targetFloorId",
+    "position",
   ]);
 });
 

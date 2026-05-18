@@ -9,6 +9,7 @@ import {
   loadStoredFloorPlanImage,
   type FloorPlanImageStorage,
 } from "./floor-plan-image-storage.ts";
+import { createPngTestFile } from "./test-floor-plan-image-fixtures.ts";
 import { uploadFloorPlanImageToEditor } from "./upload-floor-plan-image-to-editor.ts";
 
 class InMemoryFloorPlanImageStorage implements FloorPlanImageStorage {
@@ -50,9 +51,7 @@ function createProject(): EditorProject {
 test("uploadFloorPlanImageToEditor validates, persists, and associates the upload with the selected floor", async () => {
   const project = createProject();
   const storage = new InMemoryFloorPlanImageStorage();
-  const upload = new File(["binary-image-data"], "level-2.png", {
-    type: "image/png",
-  });
+  const upload = createPngTestFile("level-2.png");
 
   const result = await uploadFloorPlanImageToEditor(
     {

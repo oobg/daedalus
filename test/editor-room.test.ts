@@ -114,6 +114,69 @@ test("validateEditorRoomInput rejects polygon edits that close to an empty shape
   });
 });
 
+test("validateEditorRoomInput rejects self-intersecting room polygons", () => {
+  const result = validateEditorRoomInput({
+    roomId: "room-1",
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 2, y: 4 },
+      { x: 6, y: 6 },
+      { x: 0, y: 6 },
+      { x: 4, y: 2 },
+    ],
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: {
+      code: "invalid_room_polygon",
+      message: "Room polygon must not self-intersect.",
+    },
+  });
+});
+
+test("createValidatedEditorRoom rejects self-intersecting room polygons", () => {
+  assert.throws(
+    () =>
+      createValidatedEditorRoom({
+        roomId: "room-1",
+        roomPolygon: [
+          { x: 0, y: 0 },
+          { x: 6, y: 0 },
+          { x: 2, y: 4 },
+          { x: 6, y: 6 },
+          { x: 0, y: 6 },
+          { x: 4, y: 2 },
+        ],
+      }),
+    /Room polygon must not self-intersect\./,
+  );
+});
+
+test("createValidatedEditorRoom strips a duplicated closing point before deriving room geometry", () => {
+  const room = createValidatedEditorRoom({
+    roomId: "room-1",
+    roomName: "Lobby",
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 4 },
+      { x: 0, y: 4 },
+      { x: 0, y: 0 },
+    ],
+  });
+
+  assert.deepEqual(room.roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 8, y: 0 },
+    { x: 8, y: 4 },
+    { x: 0, y: 4 },
+  ]);
+  assert.equal(room.area, 32);
+  assert.deepEqual(room.labelPosition, { x: 4, y: 2 });
+});
+
 test("createEditorState uses validated room creation when loading project rooms", () => {
   assert.throws(
     () =>

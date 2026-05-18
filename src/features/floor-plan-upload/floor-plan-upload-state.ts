@@ -19,10 +19,10 @@ export function createInitialFloorPlanUploadState(): FloorPlanUploadState {
   };
 }
 
-export function validateFloorPlanImageSelection(
+export async function validateFloorPlanImageSelection(
   file: File | null | undefined,
-): FloorPlanUploadState {
-  const validation = validateFloorPlanImageUpload(file);
+): Promise<FloorPlanUploadState> {
+  const validation = await validateFloorPlanImageUpload(file);
 
   return {
     selectedFile: validation.ok ? validation.file : null,
