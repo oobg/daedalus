@@ -10,6 +10,7 @@ import {
   insertRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexInsertion.ts';
 import {
+  moveRoomPolygonEdgeWithInvariantValidation,
   moveRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexMovement.ts';
 import {
@@ -42,6 +43,13 @@ export interface MoveRoomPolygonVertexResult {
   readonly ok: boolean;
   readonly polygon?: RoomPolygon;
   readonly error?: 'vertex_index_out_of_range' | 'invalid_polygon';
+  readonly validation?: RoomPolygonValidationFailure;
+}
+
+export interface MoveRoomPolygonEdgeResult {
+  readonly ok: boolean;
+  readonly polygon?: RoomPolygon;
+  readonly error?: 'edge_index_out_of_range' | 'invalid_polygon';
   readonly validation?: RoomPolygonValidationFailure;
 }
 
@@ -161,6 +169,32 @@ export const moveRoomPolygonVertex = (
     polygon.points,
     vertexIndex,
     nextPoint,
+  );
+
+  if (!movement.ok) {
+    return {
+      ...movement,
+    };
+  }
+
+  return {
+    ok: true,
+    polygon: {
+      ...polygon,
+      points: normalizeRoomPolygonPoints(movement.points),
+    },
+  };
+};
+
+export const moveRoomPolygonEdge = (
+  polygon: RoomPolygon,
+  edgeIndex: number,
+  delta: DraftPoint,
+): MoveRoomPolygonEdgeResult => {
+  const movement = moveRoomPolygonEdgeWithInvariantValidation(
+    polygon.points,
+    edgeIndex,
+    delta,
   );
 
   if (!movement.ok) {

@@ -319,6 +319,70 @@ test("adaptProjectSnapshotToRenderScene stacks floors from each configured floor
   );
 });
 
+test("adaptProjectSnapshotToRenderScene derives each floor placement from the cumulative lower-floor heights", () => {
+  const project: RendererSnapshotProject = {
+    projectId: "project-cumulative-heights",
+    projectName: "Cumulative Heights Center",
+    objectVersion: 1,
+    floors: [
+      createMinimalSnapshotFloor("floor-ground", "Ground", 2.4),
+      createMinimalSnapshotFloor("floor-mezzanine", "Mezzanine", 3.35),
+      createMinimalSnapshotFloor("floor-office", "Office", 4.1),
+      createMinimalSnapshotFloor("floor-roof", "Roof", 2.85),
+    ],
+    viewState: {
+      activeFloorId: "floor-ground",
+      selectedRoomId: null,
+    },
+  };
+
+  const scene = adaptProjectSnapshotToRenderScene(project);
+  let cumulativeLowerFloorHeight = 0;
+  let cumulativeRenderHeight = 0;
+
+  scene.floors.forEach((floor) => {
+    assert.equal(floor.verticalOffset, cumulativeLowerFloorHeight);
+    assert.equal(floor.renderVerticalOffset, cumulativeRenderHeight);
+
+    cumulativeLowerFloorHeight = Number(
+      (cumulativeLowerFloorHeight + floor.floorHeight).toFixed(6),
+    );
+    cumulativeRenderHeight = Number(
+      (cumulativeRenderHeight + floor.renderHeight).toFixed(6),
+    );
+  });
+
+  assert.deepEqual(
+    scene.floors.map(({ floorId, verticalOffset, renderVerticalOffset }) => ({
+      floorId,
+      verticalOffset,
+      renderVerticalOffset,
+    })),
+    [
+      {
+        floorId: "floor-ground",
+        verticalOffset: 0,
+        renderVerticalOffset: 0,
+      },
+      {
+        floorId: "floor-mezzanine",
+        verticalOffset: 2.4,
+        renderVerticalOffset: 0.72,
+      },
+      {
+        floorId: "floor-office",
+        verticalOffset: 5.75,
+        renderVerticalOffset: 1.725,
+      },
+      {
+        floorId: "floor-roof",
+        verticalOffset: 9.85,
+        renderVerticalOffset: 2.955,
+      },
+    ],
+  );
+});
+
 test("adaptProjectSnapshotToRenderScene derives distinct render-space floor heights from configured floor heights", () => {
   const scene = adaptProjectSnapshotToRenderScene({
     projectId: "project-render-heights",

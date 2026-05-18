@@ -5,6 +5,7 @@ import {
   getSelectedRoomGeometryHandles,
   getSelectedRoomGeometrySelectionState,
   insertRoomGeometryEdgeVertex,
+  moveRoomGeometryEdge,
   moveRoomGeometryHandleVertex,
   moveRoomGeometryPolygon,
   removeRoomGeometryHandleVertex,
@@ -304,6 +305,50 @@ test('moveRoomGeometryHandleVertex ignores handles that do not belong to the roo
       },
       { x: 96, y: 72 },
     ),
+    null,
+  );
+});
+
+test('moveRoomGeometryEdge translates both vertices of the targeted room edge', () => {
+  const room = {
+    roomId: 'room-a',
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 80, y: 0 },
+      { x: 80, y: 60 },
+      { x: 0, y: 60 },
+    ],
+  };
+
+  const nextPolygon = moveRoomGeometryEdge(room, 1, { x: 16, y: 12 });
+
+  assert.deepEqual(nextPolygon, [
+    { x: 0, y: 0 },
+    { x: 96, y: 12 },
+    { x: 96, y: 72 },
+    { x: 0, y: 60 },
+  ]);
+  assert.deepEqual(room.roomPolygon, [
+    { x: 0, y: 0 },
+    { x: 80, y: 0 },
+    { x: 80, y: 60 },
+    { x: 0, y: 60 },
+  ]);
+});
+
+test('moveRoomGeometryEdge rejects edge translations that would invalidate the polygon', () => {
+  const room = {
+    roomId: 'room-a',
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 80, y: 0 },
+      { x: 80, y: 80 },
+      { x: 0, y: 80 },
+    ],
+  };
+
+  assert.equal(
+    moveRoomGeometryEdge(room, 1, { x: -100, y: -20 }),
     null,
   );
 });

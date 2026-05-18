@@ -70,7 +70,7 @@ test("associatePersistedFloorPlanUploadToFloor rejects a persisted upload from a
   );
 });
 
-test("associatePersistedFloorPlanUploadToFloor rejects linking a persisted upload when the target floor already has an association", () => {
+test("associatePersistedFloorPlanUploadToFloor replaces an existing association on the target floor only", () => {
   const floors = [
     normalizeFloor({
       id: "floor-1",
@@ -84,18 +84,26 @@ test("associatePersistedFloorPlanUploadToFloor rejects linking a persisted uploa
     }),
   ];
 
-  assert.throws(
-    () =>
-      associatePersistedFloorPlanUploadToFloor({
-        floors,
-        floorId: "floor-1",
-        persistedUpload: {
-          floorId: "floor-1",
-          assetRef: "floor-plan://project-alpha/floor-1/uploaded-ground.png",
-        },
-      }),
-    /already has an associated reference image/,
+  const result = associatePersistedFloorPlanUploadToFloor({
+    floors,
+    floorId: "floor-1",
+    persistedUpload: {
+      floorId: "floor-1",
+      assetRef: "floor-plan://project-alpha/floor-1/uploaded-ground.png",
+    },
+  });
+
+  assert.equal(
+    result.floor.referenceImage,
+    "floor-plan://project-alpha/floor-1/uploaded-ground.png",
   );
+  assert.equal(
+    result.floors[0].referenceImage,
+    "floor-plan://project-alpha/floor-1/uploaded-ground.png",
+  );
+  assert.equal(result.floors[1].referenceImage, null);
+  assert.notEqual(result.floors[0], floors[0]);
+  assert.equal(result.floors[1], floors[1]);
 });
 
 test("associatePersistedFloorPlanUploadToFloor preserves the floor-to-image mapping across write then query without mutating inputs", () => {

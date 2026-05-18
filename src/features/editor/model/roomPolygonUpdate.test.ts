@@ -10,6 +10,7 @@ import {
   createRoomPolygon,
   deleteActiveRoomPolygonVertex,
   insertActiveRoomPolygonVertex,
+  moveActiveRoomPolygonEdge,
   moveActiveRoomPolygonVertex,
   updateActiveRoomPolygon,
   type RoomPolygonUpdateState,
@@ -179,6 +180,65 @@ test('moveActiveRoomPolygonVertex edits only the active room and returns updated
     labelPosition: {
       x: 12.5,
       y: 1.75,
+    },
+  });
+  assert.deepEqual(state, {
+    rooms: [roomA, roomB],
+    activeRoomId: 'room-b',
+  });
+});
+
+test('moveActiveRoomPolygonEdge translates only the active room edge and recalculates derived metadata', () => {
+  const roomA: TestRoom = {
+    id: 'room-a',
+    name: 'Lobby',
+    polygon: createPolygon('room-a', 0),
+    area: 12,
+    labelPosition: { x: 2, y: 1.5 },
+  };
+  const roomB: TestRoom = {
+    id: 'room-b',
+    name: 'Office',
+    polygon: createPolygon('room-b', 10),
+    area: 12,
+    labelPosition: { x: 12, y: 1.5 },
+  };
+  const state: RoomPolygonUpdateState<TestRoom> = {
+    rooms: [roomA, roomB],
+    activeRoomId: 'room-b',
+  };
+
+  const result = moveActiveRoomPolygonEdge(state, 1, { x: 2, y: 1 });
+
+  assert.equal(result.ok, true);
+
+  if (!result.ok) {
+    return;
+  }
+
+  assert.equal(result.state.rooms[0], roomA);
+  assert.notEqual(result.state.rooms[1], roomB);
+  assert.deepEqual(result.geometry, {
+    ok: true,
+    polygon: {
+      roomId: 'room-b',
+      points: [
+        { x: 10, y: 0 },
+        { x: 16, y: 1 },
+        { x: 16, y: 4 },
+        { x: 10, y: 3 },
+        { x: 10, y: 0 },
+      ],
+    },
+  });
+  assert.deepEqual(result.room, {
+    id: 'room-b',
+    name: 'Office',
+    polygon: result.geometry.polygon,
+    area: 15,
+    labelPosition: {
+      x: 13,
+      y: 2,
     },
   });
   assert.deepEqual(state, {

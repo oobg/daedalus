@@ -1,8 +1,8 @@
 import type { Floor } from "../../domain/floor.ts";
 import type { StoredFloorPlanImageAsset } from "./floor-plan-image-storage.ts";
 import {
-  assignFloorReferenceImageToFloor,
   type FloorReferenceImageMetadataUpdateResult,
+  replaceFloorReferenceImage,
 } from "./floor-reference-image-metadata.ts";
 
 export interface AssociatePersistedFloorPlanUploadInput {
@@ -25,10 +25,10 @@ export function associatePersistedFloorPlanUploadToFloor(
     );
   }
 
-  const association = assignFloorReferenceImageToFloor({
+  const association = replaceFloorReferenceImage({
     floors: input.floors,
     floorId: input.floorId,
-    referenceImageAssetRef: input.persistedUpload.assetRef,
+    nextReferenceImage: input.persistedUpload.assetRef,
   });
 
   return {

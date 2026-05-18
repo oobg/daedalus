@@ -43,6 +43,17 @@ export type RoomPolygonVertexMovementResult =
       readonly validation?: RoomPolygonValidationFailure;
     };
 
+export type RoomPolygonEdgeMovementResult =
+  | {
+      readonly ok: true;
+      readonly points: Point2D[];
+    }
+  | {
+      readonly ok: false;
+      readonly error: 'edge_index_out_of_range' | 'invalid_polygon';
+      readonly validation?: RoomPolygonValidationFailure;
+    };
+
 export const moveRoomPolygonVertexAt = (
   points: readonly Point2D[],
   vertexIndex: number,
@@ -88,6 +99,73 @@ export const moveRoomPolygonVertexWithInvariantValidation = (
     return {
       ok: false,
       error: 'vertex_index_out_of_range',
+    };
+  }
+
+  const validation = validateRoomPolygonVertexEditInvariant(
+    closePointsForValidation(nextPoints),
+  );
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: 'invalid_polygon',
+      validation: validation.validation,
+    };
+  }
+
+    return {
+      ok: true,
+      points: nextPoints,
+    };
+};
+
+export const moveRoomPolygonEdgeBy = (
+  points: readonly Point2D[],
+  edgeIndex: number,
+  delta: Point2D,
+): Point2D[] | null => {
+  const closed = isClosedPolygon(points);
+  const openPoints = closed ? points.slice(0, -1) : points.slice();
+
+  if (edgeIndex < 0 || edgeIndex >= openPoints.length) {
+    return null;
+  }
+
+  const startVertexIndex = edgeIndex;
+  const endVertexIndex = (edgeIndex + 1) % openPoints.length;
+  const nextOpenPoints = openPoints.map((point, index) => {
+    if (index !== startVertexIndex && index !== endVertexIndex) {
+      return {
+        x: point.x,
+        y: point.y,
+      };
+    }
+
+    return {
+      x: point.x + delta.x,
+      y: point.y + delta.y,
+    };
+  });
+
+  if (!closed) {
+    return nextOpenPoints;
+  }
+
+  return [...nextOpenPoints, { ...nextOpenPoints[0] }];
+};
+
+export const moveRoomPolygonEdgeWithInvariantValidation = (
+  points: readonly Point2D[],
+  edgeIndex: number,
+  delta: Point2D,
+): RoomPolygonEdgeMovementResult => {
+  const nextPoints = moveRoomPolygonEdgeBy(points, edgeIndex, delta);
+
+  if (nextPoints === null) {
+    return {
+      ok: false,
+      error: 'edge_index_out_of_range',
     };
   }
 

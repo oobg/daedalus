@@ -132,6 +132,57 @@ test("updateFloorHeight updates only the targeted floor height in application st
   assert.deepEqual(nextProject.floors.map((floor) => floor.floorHeight), [3, 5.5]);
 });
 
+test("setFloorReferenceImage updates only the specified floor reference and preserves other stored floor references", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const firstFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(firstFloorId);
+
+  store.getState().updateFloor(firstFloorId, {
+    floorName: "Ground",
+    referenceImage: "floor-plan://project/ground.png",
+  });
+  store.getState().addFloor();
+
+  const secondFloorId =
+    store
+      .getState()
+      .project.floors.find((floor) => floor.floorId !== firstFloorId)?.floorId ?? null;
+
+  assert.ok(secondFloorId);
+
+  store.getState().updateFloor(secondFloorId, {
+    floorName: "Mezzanine",
+    referenceImage: "floor-plan://project/mezzanine.png",
+  });
+
+  store
+    .getState()
+    .setFloorReferenceImage(secondFloorId, "floor-plan://project/mezzanine-updated.png");
+
+  const nextProject = store.getState().project;
+  const firstFloor = nextProject.floors.find((floor) => floor.floorId === firstFloorId);
+  const secondFloor = nextProject.floors.find((floor) => floor.floorId === secondFloorId);
+
+  assert.ok(firstFloor);
+  assert.ok(secondFloor);
+  assert.equal(firstFloor.referenceImage, "floor-plan://project/ground.png");
+  assert.equal(
+    secondFloor.referenceImage,
+    "floor-plan://project/mezzanine-updated.png",
+  );
+
+  const persistedProject = JSON.parse(storage.getItem("daedalus.project") ?? "null");
+
+  assert.ok(persistedProject);
+  assert.equal(persistedProject.floors[0].referenceImage, "floor-plan://project/ground.png");
+  assert.equal(
+    persistedProject.floors[1].referenceImage,
+    "floor-plan://project/mezzanine-updated.png",
+  );
+});
+
 test("commitDraft creates a room polygon record and persists it as room source data", () => {
   const storage = new MemoryStorage();
   const store = createEditorStore({ storage });

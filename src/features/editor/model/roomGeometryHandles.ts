@@ -1,6 +1,7 @@
 import type { EditorPoint, RoomOpening } from '../../../domain/editor-state.ts';
 import { insertRoomPolygonVertexAt } from './roomPolygonVertexInsertion.ts';
 import {
+  moveRoomPolygonEdgeWithInvariantValidation,
   moveRoomPolygonVertexWithInvariantValidation,
 } from './roomPolygonVertexMovement.ts';
 import { removeRoomPolygonVertexAt } from './roomPolygonVertexRemoval.ts';
@@ -131,6 +132,26 @@ export const moveRoomGeometryHandleVertex = <
     room.roomPolygon,
     handle.vertexIndex,
     nextPosition,
+  );
+
+  return movement.ok ? movement.points : null;
+};
+
+export const moveRoomGeometryEdge = <
+  Room extends RoomGeometryHandleRoom,
+>(
+  room: Room,
+  edgeIndex: number,
+  delta: EditorPoint,
+): EditorPoint[] | null => {
+  if (edgeIndex < 0 || edgeIndex >= room.roomPolygon.length) {
+    return null;
+  }
+
+  const movement = moveRoomPolygonEdgeWithInvariantValidation(
+    room.roomPolygon,
+    edgeIndex,
+    delta,
   );
 
   return movement.ok ? movement.points : null;
