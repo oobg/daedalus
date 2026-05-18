@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  saveAcceptedFloorPlanImage,
+  type FloorPlanImageStorage,
+} from "../src/features/floor-plan-upload/floor-plan-image-storage.ts";
+import {
+  deriveStoredFloorPlanReferenceMetadata,
+} from "../src/features/floor-plan-upload/derive-stored-floor-plan-reference-metadata.ts";
+import {
+  createPngTestFile,
+} from "../src/features/floor-plan-upload/test-floor-plan-image-fixtures.ts";
 import type {
   SerializedProjectData,
 } from "../src/features/project-export/project-serializer.ts";
@@ -13,6 +23,20 @@ import {
 } from "../src/features/project-persistence/project-restore-orchestrator.ts";
 
 class InMemoryLocalProjectStorage implements LocalProjectStorage {
+  private readonly entries = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this.entries.get(key) ?? null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.entries.set(key, value);
+  }
+}
+
+class InMemoryCombinedStorage
+  implements LocalProjectStorage, FloorPlanImageStorage
+{
   private readonly entries = new Map<string, string>();
 
   getItem(key: string): string | null {
@@ -96,4 +120,54 @@ test("persistence round-trip preserves each floor height across save and restore
       height: floorHeight,
     })),
   );
+});
+
+test("persistence round-trip preserves enough floor plan metadata to reattach the stored reference image", async () => {
+  const storage = new InMemoryCombinedStorage();
+  const storedAsset = await saveAcceptedFloorPlanImage(
+    {
+      projectId: "project-persistence-round-trip",
+      floorId: "floor-2",
+      file: createPngTestFile("second-floor.png"),
+    },
+    storage,
+  );
+  const serialized = createSerializedProject();
+
+  serialized.floors[1] = {
+    ...serialized.floors[1],
+    referenceImage: storedAsset.assetRef,
+  };
+
+  saveProjectToLocalStorage(
+    serialized,
+    storage,
+    new Date("2026-05-15T09:15:00.000Z"),
+  );
+
+  const restored = restoreStoredProjectState(serialized.projectId, storage);
+
+  assert.ok(restored);
+
+  const derivedReferenceMetadata = deriveStoredFloorPlanReferenceMetadata(
+    {
+      floors: restored.state.project.floors,
+      floorId: "floor-2",
+    },
+    storage,
+  );
+
+  assert.deepEqual(derivedReferenceMetadata, {
+    ok: true,
+    code: "derived",
+    metadata: {
+      assetRef: storedAsset.assetRef,
+      storageKey: storedAsset.storageKey,
+      projectId: "project-persistence-round-trip",
+      floorId: "floor-2",
+      fileName: "second-floor.png",
+      mimeType: "image/png",
+      size: storedAsset.size,
+    },
+  });
 });

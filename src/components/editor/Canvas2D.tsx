@@ -345,6 +345,10 @@ export default function Canvas2D({ width, height, referenceImageSource, stageRef
 
       if (begin.handled) {
         setRoomPointerSession(begin.state.pointerSession);
+
+        if (begin.started && begin.placementPoint) {
+          addDraftPoint(begin.placementPoint);
+        }
       }
       return;
     }

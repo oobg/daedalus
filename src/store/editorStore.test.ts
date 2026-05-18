@@ -19,6 +19,119 @@ class MemoryStorage {
   }
 }
 
+test("createEditorStore creates the initial floor with the default floor height", () => {
+  const store = createEditorStore({ storage: new MemoryStorage() });
+  const activeFloorId = store.getState().project.viewState.activeFloorId;
+  const activeFloor = store
+    .getState()
+    .project.floors.find((floor) => floor.floorId === activeFloorId);
+
+  assert.ok(activeFloor);
+  assert.equal(activeFloor.floorHeight, 3);
+});
+
+test("addFloor persists the created floor height in local storage", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+
+  store.getState().addFloor();
+
+  const persistedProject = JSON.parse(storage.getItem("daedalus.project") ?? "null");
+
+  assert.ok(persistedProject);
+  assert.equal(persistedProject.floors.length, 2);
+  assert.equal(persistedProject.floors[1].floorHeight, 3);
+});
+
+test("updateFloor persists an edited floor height and loadFromLocalStorage restores it", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const initialProject = store.getState().project;
+  const activeFloorId = initialProject.viewState.activeFloorId;
+
+  assert.ok(activeFloorId);
+
+  store.getState().updateFloor(activeFloorId, { floorHeight: 5.5 });
+
+  const updatedFloor = store
+    .getState()
+    .project.floors.find((floor) => floor.floorId === activeFloorId);
+
+  assert.ok(updatedFloor);
+  assert.equal(updatedFloor.floorHeight, 5.5);
+
+  const persistedProject = JSON.parse(storage.getItem("daedalus.project") ?? "null");
+
+  assert.ok(persistedProject);
+  assert.equal(persistedProject.floors[0].floorHeight, 5.5);
+
+  const restoredStore = createEditorStore({ storage });
+
+  assert.equal(restoredStore.getState().loadFromLocalStorage(), true);
+
+  const restoredFloor = restoredStore
+    .getState()
+    .project.floors.find((floor) => floor.floorId === activeFloorId);
+
+  assert.ok(restoredFloor);
+  assert.equal(restoredFloor.floorHeight, 5.5);
+});
+
+test("updateFloorHeight updates only the targeted floor height in application state", () => {
+  const storage = new MemoryStorage();
+  const store = createEditorStore({ storage });
+  const initialActiveFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(initialActiveFloorId);
+
+  store.getState().updateFloor(initialActiveFloorId, {
+    floorName: "Ground",
+    referenceImage: "floor-plan://project/ground.png",
+  });
+  store.getState().addFloor();
+
+  const secondFloorId =
+    store
+      .getState()
+      .project.floors.find((floor) => floor.floorId !== initialActiveFloorId)?.floorId ?? null;
+
+  assert.ok(secondFloorId);
+
+  store.getState().updateFloor(secondFloorId, {
+    floorName: "Mezzanine",
+    floorHeight: 4,
+    referenceImage: "floor-plan://project/mezzanine.png",
+  });
+
+  const previousProject = store.getState().project;
+  const firstFloorBefore = previousProject.floors.find(
+    (floor) => floor.floorId === initialActiveFloorId,
+  );
+
+  assert.ok(firstFloorBefore);
+
+  store.getState().updateFloorHeight(secondFloorId, 5.5);
+
+  const nextProject = store.getState().project;
+  const firstFloorAfter = nextProject.floors.find(
+    (floor) => floor.floorId === initialActiveFloorId,
+  );
+  const secondFloorAfter = nextProject.floors.find(
+    (floor) => floor.floorId === secondFloorId,
+  );
+
+  assert.ok(firstFloorAfter);
+  assert.ok(secondFloorAfter);
+  assert.notEqual(nextProject, previousProject);
+  assert.equal(firstFloorAfter.floorHeight, 3);
+  assert.equal(firstFloorAfter.floorName, "Ground");
+  assert.equal(firstFloorAfter.referenceImage, "floor-plan://project/ground.png");
+  assert.equal(secondFloorAfter.floorHeight, 5.5);
+  assert.equal(secondFloorAfter.floorName, "Mezzanine");
+  assert.equal(secondFloorAfter.referenceImage, "floor-plan://project/mezzanine.png");
+  assert.deepEqual(nextProject.floors.map((floor) => floor.floorHeight), [3, 5.5]);
+});
+
 test("commitDraft creates a room polygon record and persists it as room source data", () => {
   const storage = new MemoryStorage();
   const store = createEditorStore({ storage });

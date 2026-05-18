@@ -10,6 +10,7 @@ import {
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { createEditorStore } from "../../store/createEditorStore.ts";
 import { findFloorHeightInput } from "./FloorHeightInput.ts";
 import {
   FloorHeightConfiguration,
@@ -89,6 +90,76 @@ test("FloorHeightConfiguration dispatches floor selection and active-floor heigh
 
   assert.deepEqual(selections, ["floor-3"]);
   assert.deepEqual(edits, [{ floorId: "floor-2", floorHeight: 5.25 }]);
+});
+
+test("FloorHeightConfiguration applies a typed height change to the selected floor only", () => {
+  const store = createEditorStore({ storage: null });
+  const initialFloorId = store.getState().project.viewState.activeFloorId;
+
+  assert.ok(initialFloorId);
+
+  store.getState().updateFloor(initialFloorId, {
+    floorName: "Ground",
+    floorHeight: 3,
+  });
+  store.getState().addFloor();
+
+  const addedFloorId =
+    store
+      .getState()
+      .project.floors.find((floor) => floor.floorId !== initialFloorId)?.floorId ?? null;
+
+  assert.ok(addedFloorId);
+
+  store.getState().updateFloor(addedFloorId, {
+    floorName: "Mezzanine",
+    floorHeight: 4.5,
+  });
+
+  const tree = resolveCompositeElements(
+    FloorHeightConfiguration({
+      floors: store.getState().project.floors,
+      activeFloorId: store.getState().project.viewState.activeFloorId,
+      floorHeightInput: "3",
+      onSelectFloor: (floorId) => {
+        store.getState().setActiveFloor(floorId);
+      },
+      onFloorHeightInputChange: () => undefined,
+      onFloorHeightChange: ({ floorHeight }) => {
+        store.getState().updateActiveFloorHeight(floorHeight);
+      },
+    }),
+  );
+
+  const floorButtons = collectFloorSelectionButtons(tree);
+  const mezzanineButton = floorButtons.find(
+    (button) => button.props["data-floor-id"] === addedFloorId,
+  );
+  const heightInput = findFloorHeightInput(tree);
+
+  assert.ok(mezzanineButton);
+  assert.ok(heightInput);
+
+  mezzanineButton.props.onClick();
+  heightInput.props.onChange({
+    target: {
+      value: "5.25",
+    },
+  } as React.ChangeEvent<HTMLInputElement>);
+
+  const updatedProject = store.getState().project;
+
+  assert.equal(updatedProject.viewState.activeFloorId, addedFloorId);
+  assert.deepEqual(
+    updatedProject.floors.map((floor) => ({
+      floorId: floor.floorId,
+      floorHeight: floor.floorHeight,
+    })),
+    [
+      { floorId: initialFloorId, floorHeight: 3 },
+      { floorId: addedFloorId, floorHeight: 5.25 },
+    ],
+  );
 });
 
 test("FloorHeightConfiguration forwards blur resets for the active floor only", () => {

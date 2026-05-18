@@ -139,11 +139,7 @@ export default function FloorSidebar() {
           floorHeightInput={floorHeightInput}
           onSelectFloor={setActiveFloor}
           onFloorHeightInputChange={setFloorHeightInput}
-          onFloorHeightChange={({ floorId, floorHeight }) => {
-            if (floorId !== activeFloorId) {
-              return;
-            }
-
+          onFloorHeightChange={({ floorHeight }) => {
             updateActiveFloorHeight(floorHeight);
           }}
           onFloorHeightInputBlur={handleFloorHeightBlur}

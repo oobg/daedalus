@@ -7,7 +7,7 @@ import {
   updateRoomPolygonPointerDrawing,
 } from "./roomPolygonPointerDrawing.ts";
 
-test("room polygon pointer handlers create a vertex from a pointer down/move/up sequence", () => {
+test("room polygon pointer handlers start a room draft and record the first ordered vertex on the initial pointer action", () => {
   const initialState = {
     activeTool: "room",
     isDrawing: false,
@@ -16,10 +16,61 @@ test("room polygon pointer handlers create a vertex from a pointer down/move/up 
   } as const;
 
   const begun = beginRoomPolygonPointerDrawing(initialState, { x: 12, y: 18 });
+
+  assert.deepEqual(begun, {
+    handled: true,
+    started: true,
+    placementPoint: { x: 12, y: 18 },
+    state: {
+      activeTool: "room",
+      isDrawing: true,
+      draftPoints: [{ x: 12, y: 18 }],
+      pointerSession: {
+        pointerDownPoint: { x: 12, y: 18 },
+        pointerCurrentPoint: { x: 12, y: 18 },
+      },
+    },
+  });
+  assert.deepEqual(initialState.draftPoints, []);
+});
+
+test("room polygon pointer handlers do not create a duplicate vertex when the initial pointer action ends", () => {
+  const begun = beginRoomPolygonPointerDrawing(
+    {
+      activeTool: "room",
+      isDrawing: false,
+      draftPoints: [],
+      pointerSession: null,
+    },
+    { x: 12, y: 18 },
+  );
+  const completed = completeRoomPolygonPointerDrawing(begun.state, { x: 12, y: 18 });
+
+  assert.deepEqual(completed, {
+    handled: true,
+    state: {
+      activeTool: "room",
+      isDrawing: true,
+      draftPoints: [{ x: 12, y: 18 }],
+      pointerSession: null,
+    },
+  });
+});
+
+test("room polygon pointer handlers create the next vertex from a pointer down/move/up sequence after the draft has started", () => {
+  const initialState = {
+    activeTool: "room",
+    isDrawing: true,
+    draftPoints: [{ x: 12, y: 18 }],
+    pointerSession: null,
+  } as const;
+
+  const begun = beginRoomPolygonPointerDrawing(initialState, { x: 12, y: 18 });
   const moved = updateRoomPolygonPointerDrawing(begun.state, { x: 16, y: 22 });
   const completed = completeRoomPolygonPointerDrawing(moved.state, { x: 16, y: 22 });
 
   assert.equal(begun.handled, true);
+  assert.equal(begun.started, false);
   assert.deepEqual(moved.state.pointerSession, {
     pointerDownPoint: { x: 12, y: 18 },
     pointerCurrentPoint: { x: 16, y: 22 },
@@ -30,7 +81,7 @@ test("room polygon pointer handlers create a vertex from a pointer down/move/up 
     state: {
       activeTool: "room",
       isDrawing: true,
-      draftPoints: [{ x: 16, y: 22 }],
+      draftPoints: [{ x: 12, y: 18 }, { x: 16, y: 22 }],
       pointerSession: null,
     },
   });

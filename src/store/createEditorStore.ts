@@ -27,7 +27,10 @@ import {
   collectRoomDraftPoints,
   finalizeEditorRoomDraft,
 } from "../features/editor/model/roomDraft.ts";
-import { applyValidatedSelectedFloorHeightChange } from "../features/editor/model/floorHeightEditing.ts";
+import {
+  applyValidatedFloorHeightChange,
+  applyValidatedSelectedFloorHeightChange,
+} from "../features/editor/model/floorHeightEditing.ts";
 import { translateRoomGeometrySource } from "../features/editor/model/roomGeometryHandles.ts";
 import { collectRoomOutlinePoint } from "../features/editor/model/roomOutlinePointCollection.ts";
 import { buildFloorGuideSvgExport } from "../features/project-export/floor-guide-svg-export.ts";
@@ -73,6 +76,7 @@ export interface EditorStoreState {
       referenceImage?: string | null;
     },
   ) => void;
+  updateFloorHeight: (floorId: string, floorHeight: number) => void;
   updateActiveFloorHeight: (floorHeight: number) => void;
   removeFloor: (floorId: string) => void;
   setActiveFloor: (floorId: string) => void;
@@ -184,27 +188,41 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
       const { project } = get();
       const floorId = nanoid();
       const index = project.floors.length + 1;
-
-      set({
-        project: addEditorFloor(project, {
-          floorId,
-          floorName: `${index}F`,
-          floorHeight: DEFAULT_FLOOR_HEIGHT,
-        }),
+      const nextProject = addEditorFloor(project, {
+        floorId,
+        floorName: `${index}F`,
+        floorHeight: DEFAULT_FLOOR_HEIGHT,
       });
+
+      set({ project: nextProject });
+      get().saveToLocalStorage();
     },
 
     updateFloor: (floorId, input) => {
       set({ project: updateEditorFloor(get().project, floorId, input) });
+      get().saveToLocalStorage();
     },
 
-    updateActiveFloorHeight: (floorHeight) => {
+    updateFloorHeight: (floorId, floorHeight) => {
       set({
-        project: applyValidatedSelectedFloorHeightChange(
+        project: applyValidatedFloorHeightChange(
           get().project,
+          floorId,
           floorHeight,
         ),
       });
+      get().saveToLocalStorage();
+    },
+
+    updateActiveFloorHeight: (floorHeight) => {
+      const activeFloorId = get().project.viewState.activeFloorId;
+
+      if (activeFloorId === null) {
+        applyValidatedSelectedFloorHeightChange(get().project, floorHeight);
+        return;
+      }
+
+      get().updateFloorHeight(activeFloorId, floorHeight);
     },
 
     removeFloor: (floorId) => {
@@ -366,6 +384,7 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
           referenceImage: dataUrl,
         }),
       });
+      get().saveToLocalStorage();
     },
 
     setActiveFloorReferenceImage: (dataUrl) => {

@@ -18,6 +18,7 @@ export interface RoomPolygonPointerDrawingState
 export interface RoomPolygonPointerResult {
   readonly handled: boolean;
   readonly state: RoomPolygonPointerDrawingState;
+  readonly started?: boolean;
   readonly completed?: boolean;
   readonly placementPoint?: DraftPoint;
   readonly error?: "invalid_point" | "duplicate_point";
@@ -60,10 +61,19 @@ export const beginRoomPolygonPointerDrawing = (
     };
   }
 
+  const isInitialDraftPointerAction =
+    state.isDrawing === false && state.draftPoints.length === 0;
+
   return {
     handled: true,
+    started: isInitialDraftPointerAction,
+    placementPoint: isInitialDraftPointerAction ? clonePoint(point) : undefined,
     state: {
       ...state,
+      isDrawing: isInitialDraftPointerAction ? true : state.isDrawing,
+      draftPoints: isInitialDraftPointerAction
+        ? [...state.draftPoints, clonePoint(point)]
+        : state.draftPoints,
       pointerSession: {
         pointerDownPoint: clonePoint(point),
         pointerCurrentPoint: clonePoint(point),
@@ -124,6 +134,19 @@ export const completeRoomPolygonPointerDrawing = (
   }
 
   const placementPoint = clonePoint(point);
+  const isInitialDraftPointerRelease =
+    state.draftPoints.length === 1 &&
+    state.pointerSession.pointerDownPoint.x === placementPoint.x &&
+    state.pointerSession.pointerDownPoint.y === placementPoint.y &&
+    state.draftPoints[0]?.x === state.pointerSession.pointerDownPoint.x &&
+    state.draftPoints[0]?.y === state.pointerSession.pointerDownPoint.y;
+
+  if (isInitialDraftPointerRelease) {
+    return {
+      handled: true,
+      state: clearPointerSession(state),
+    };
+  }
 
   if (
     state.draftPoints.length >= 3 &&

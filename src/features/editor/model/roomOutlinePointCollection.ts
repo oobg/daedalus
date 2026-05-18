@@ -4,6 +4,7 @@ import {
   type CaptureRoomPolygonCanvasClickResult,
   type RoomPolygonDrawingState,
 } from "./roomPolygonDrawingMode.ts";
+import { extendActiveRoomPolygonDraft } from "./roomPolygonVertexExtension.ts";
 
 export interface RoomOutlineCollectionEditorState
   extends RoomPolygonDrawingState {}
@@ -15,4 +16,6 @@ export const collectRoomOutlinePoint = (
   state: RoomOutlineCollectionEditorState,
   point: EditorPoint,
 ): CollectRoomOutlinePointResult =>
-  captureRoomPolygonCanvasClick(state, point);
+  state.isDrawing
+    ? extendActiveRoomPolygonDraft(state, point)
+    : captureRoomPolygonCanvasClick(state, point);
