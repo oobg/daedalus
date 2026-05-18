@@ -12,6 +12,7 @@ import { uploadFloorPlanImageToEditor } from "@/features/floor-plan-upload/uploa
 import {
   formatFloorHeightEditorValue,
 } from "@/features/editor/model/floorHeightEditing";
+import { downloadFloorGuideSvg } from "@/features/project-export/download-floor-guide-svg";
 import { FloorHeightConfiguration } from "@/components/organisms/FloorHeightConfiguration";
 import { validateUploadedProjectFile } from "@/features/project-export/validate-uploaded-project-file";
 
@@ -38,7 +39,6 @@ export default function FloorSidebar() {
   const loadFromLocalStorage  = useEditorStore(s => s.loadFromLocalStorage);
   const exportJSON        = useEditorStore(s => s.exportJSON);
   const importJSON        = useEditorStore(s => s.importJSON);
-  const exportSVG         = useEditorStore(s => s.exportSVG);
 
   const importFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef  = useRef<HTMLInputElement>(null);
@@ -221,7 +221,7 @@ export default function FloorSidebar() {
           { label: "불러오기 (로컬)", Icon: FolderOpen, action: () => loadFromLocalStorage() },
           { label: "JSON 내보내기",   Icon: Download,   action: handleExportJSON },
           { label: "JSON 가져오기",   Icon: Upload,     action: () => importFileRef.current?.click() },
-          { label: "SVG 내보내기",    Icon: FileJson,   action: () => exportSVG() },
+          { label: "SVG 내보내기",    Icon: FileJson,   action: () => downloadFloorGuideSvg(project) },
         ] as const).map(({ label, Icon, action }) => (
           <Button
             key={label}

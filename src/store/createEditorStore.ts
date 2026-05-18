@@ -36,11 +36,6 @@ import {
 } from "../features/editor/model/roomPolygonStatePersistence.ts";
 import { translateRoomGeometrySource } from "../features/editor/model/roomGeometryHandles.ts";
 import { collectRoomOutlinePoint } from "../features/editor/model/roomOutlinePointCollection.ts";
-import { buildFloorGuideSvgExport } from "../features/project-export/floor-guide-svg-export.ts";
-import {
-  adaptProjectSnapshotToRenderScene,
-  projectEditorStateForRenderer,
-} from "../features/renderer/index.ts";
 import {
   loadActiveProjectIdFromLocalStorage,
   loadProjectFromLocalStorage,
@@ -130,7 +125,6 @@ export interface EditorStoreState {
   importJSON: (json: string) => { ok: true } | { ok: false; error: string };
   saveToLocalStorage: () => void;
   loadFromLocalStorage: () => boolean;
-  exportSVG: (floorId?: string) => void;
 }
 
 function makeInitialProject(): EditorProject {
@@ -595,27 +589,6 @@ export function createEditorStore(options: EditorStoreOptions = {}) {
       } catch {
         return false;
       }
-    },
-
-    exportSVG: (floorId) => {
-      const { project } = get();
-      const targetFloorId = floorId ?? project.viewState.activeFloorId;
-      const snapshot = projectEditorStateForRenderer(project);
-      const scene = adaptProjectSnapshotToRenderScene(snapshot);
-      const floor = scene.floors.find((candidate) => candidate.floorId === targetFloorId);
-
-      if (!floor) {
-        return;
-      }
-
-      const svg = buildFloorGuideSvgExport(floor);
-      const blob = new Blob([svg], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${floor.floorName ?? "floor"}-guide.svg`;
-      link.click();
-      URL.revokeObjectURL(url);
     },
   }));
 }
