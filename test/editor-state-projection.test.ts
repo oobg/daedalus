@@ -4,11 +4,288 @@ import test from "node:test";
 import { createEditorProject } from "../src/domain/editor-state.ts";
 import {
   EDITOR_STATE_PROJECTION_VERSION,
+  mapEditorFloorToRendererSnapshotFloor,
+  mapEditorRoomToRendererSnapshotRoom,
   RENDERER_CONTRACT_FIELDS,
   createReadonlyEditorStateProjection,
   projectEditorStateForRenderer,
   serializeEditorStateProjection,
 } from "../src/features/renderer/index.ts";
+
+test("mapEditorRoomToRendererSnapshotRoom deterministically projects a single editor room into renderer snapshot shape", () => {
+  const project = createEditorProject({
+    projectId: "project-room-mapping",
+    floors: [
+      {
+        floorId: "floor-1",
+        rooms: [
+          {
+            roomId: "room-atrium",
+            roomName: "Atrium",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 12, y: 0 },
+              { x: 12, y: 7 },
+              { x: 0, y: 7 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-atrium:edge:1",
+                roomId: "room-atrium",
+                adjacentRoomId: "room-gallery",
+                adjacentEdgeId: "room-gallery:edge:3",
+              },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "opening-east-window",
+                openingType: "window",
+                attachedEdgeId: "room-atrium:edge:1",
+                edgeRelativePosition: 0.25,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const room = project.floors[0].rooms[0];
+
+  const firstProjection = mapEditorRoomToRendererSnapshotRoom(room);
+  const secondProjection = mapEditorRoomToRendererSnapshotRoom(room);
+
+  assert.deepEqual(firstProjection, {
+    roomId: "room-atrium",
+    roomName: "Atrium",
+    roomPolygon: [
+      { x: 0, y: 0 },
+      { x: 12, y: 0 },
+      { x: 12, y: 7 },
+      { x: 0, y: 7 },
+    ],
+    sharedBoundaries: [
+      {
+        edgeId: "room-atrium:edge:1",
+        adjacentRoomId: "room-gallery",
+        adjacentEdgeId: "room-gallery:edge:3",
+      },
+    ],
+    area: 84,
+    labelPosition: { x: 6, y: 3.5 },
+    walls: [
+      {
+        edgeId: "room-atrium:edge:0",
+        start: { x: 0, y: 0 },
+        end: { x: 12, y: 0 },
+      },
+      {
+        edgeId: "room-atrium:edge:1",
+        start: { x: 12, y: 0 },
+        end: { x: 12, y: 7 },
+      },
+      {
+        edgeId: "room-atrium:edge:2",
+        start: { x: 12, y: 7 },
+        end: { x: 0, y: 7 },
+      },
+      {
+        edgeId: "room-atrium:edge:3",
+        start: { x: 0, y: 7 },
+        end: { x: 0, y: 0 },
+      },
+    ],
+    openings: [
+      {
+        openingId: "opening-east-window",
+        openingType: "window",
+        attachedEdgeId: "room-atrium:edge:1",
+        edgeRelativePosition: 0.25,
+      },
+    ],
+  });
+  assert.deepEqual(secondProjection, firstProjection);
+
+  room.roomPolygon[1].x = 99;
+  room.sharedBoundaries[0].adjacentRoomId = "room-mutated";
+  room.edgeOpenings?.[0] && (room.edgeOpenings[0].edgeRelativePosition = 0.9);
+
+  assert.deepEqual(firstProjection.roomPolygon[1], { x: 12, y: 0 });
+  assert.equal(firstProjection.sharedBoundaries[0].adjacentRoomId, "room-gallery");
+  assert.equal(firstProjection.openings?.[0].edgeRelativePosition, 0.25);
+});
+
+test("mapEditorFloorToRendererSnapshotFloor deterministically orders mapped rooms and vertical connectors without aliasing inputs", () => {
+  const project = createEditorProject({
+    projectId: "project-floor-mapping",
+    floors: [
+      {
+        floorId: "floor-z",
+        floorName: "Upper",
+        floorHeight: 4.25,
+        referenceImage: "floor-plan://project-floor-mapping/upper.png",
+        rooms: [
+          {
+            roomId: "room-zeta",
+            roomName: "Zeta",
+            roomPolygon: [
+              { x: 10, y: 0 },
+              { x: 14, y: 0 },
+              { x: 14, y: 4 },
+              { x: 10, y: 4 },
+            ],
+          },
+          {
+            roomId: "room-alpha",
+            roomName: "Alpha",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 6, y: 0 },
+              { x: 6, y: 4 },
+              { x: 0, y: 4 },
+            ],
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-z",
+            connectorType: "stair",
+            roomId: "room-zeta",
+            targetFloorId: "floor-top",
+            position: { x: 11, y: 1 },
+          },
+          {
+            connectorId: "connector-a",
+            connectorType: "elevator",
+            roomId: "room-alpha",
+            targetFloorId: "floor-lobby",
+            position: { x: 2, y: 1.5 },
+          },
+        ],
+      },
+    ],
+  });
+
+  const floor = project.floors[0];
+  const mappedRooms = [
+    mapEditorRoomToRendererSnapshotRoom(floor.rooms[0]),
+    mapEditorRoomToRendererSnapshotRoom(floor.rooms[1]),
+  ];
+
+  const mappedFloor = mapEditorFloorToRendererSnapshotFloor(floor, mappedRooms);
+
+  assert.deepEqual(mappedFloor, {
+    floorId: "floor-z",
+    floorName: "Upper",
+    floorHeight: 4.25,
+    referenceImage: "floor-plan://project-floor-mapping/upper.png",
+    rooms: [
+      {
+        roomId: "room-alpha",
+        roomName: "Alpha",
+        roomPolygon: [
+          { x: 0, y: 0 },
+          { x: 6, y: 0 },
+          { x: 6, y: 4 },
+          { x: 0, y: 4 },
+        ],
+        sharedBoundaries: [],
+        area: 24,
+        labelPosition: { x: 3, y: 2 },
+        walls: [
+          {
+            edgeId: "room-alpha:edge:0",
+            start: { x: 0, y: 0 },
+            end: { x: 6, y: 0 },
+          },
+          {
+            edgeId: "room-alpha:edge:1",
+            start: { x: 6, y: 0 },
+            end: { x: 6, y: 4 },
+          },
+          {
+            edgeId: "room-alpha:edge:2",
+            start: { x: 6, y: 4 },
+            end: { x: 0, y: 4 },
+          },
+          {
+            edgeId: "room-alpha:edge:3",
+            start: { x: 0, y: 4 },
+            end: { x: 0, y: 0 },
+          },
+        ],
+        openings: [],
+      },
+      {
+        roomId: "room-zeta",
+        roomName: "Zeta",
+        roomPolygon: [
+          { x: 10, y: 0 },
+          { x: 14, y: 0 },
+          { x: 14, y: 4 },
+          { x: 10, y: 4 },
+        ],
+        sharedBoundaries: [],
+        area: 16,
+        labelPosition: { x: 12, y: 2 },
+        walls: [
+          {
+            edgeId: "room-zeta:edge:0",
+            start: { x: 10, y: 0 },
+            end: { x: 14, y: 0 },
+          },
+          {
+            edgeId: "room-zeta:edge:1",
+            start: { x: 14, y: 0 },
+            end: { x: 14, y: 4 },
+          },
+          {
+            edgeId: "room-zeta:edge:2",
+            start: { x: 14, y: 4 },
+            end: { x: 10, y: 4 },
+          },
+          {
+            edgeId: "room-zeta:edge:3",
+            start: { x: 10, y: 4 },
+            end: { x: 10, y: 0 },
+          },
+        ],
+        openings: [],
+      },
+    ],
+    verticalConnectors: [
+      {
+        connectorId: "connector-a",
+        connectorType: "elevator",
+        roomId: "room-alpha",
+        targetFloorId: "floor-lobby",
+        position: { x: 2, y: 1.5 },
+      },
+      {
+        connectorId: "connector-z",
+        connectorType: "stair",
+        roomId: "room-zeta",
+        targetFloorId: "floor-top",
+        position: { x: 11, y: 1 },
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    mappedFloor.rooms.map((room) => room.roomId),
+    ["room-alpha", "room-zeta"],
+  );
+  assert.deepEqual(
+    mappedFloor.verticalConnectors?.map((connector) => connector.connectorId),
+    ["connector-a", "connector-z"],
+  );
+
+  mappedRooms[1].roomPolygon[0].x = 999;
+  floor.verticalConnectors?.[0] && (floor.verticalConnectors[0].position.x = 999);
+
+  assert.equal(mappedFloor.rooms[0].roomPolygon[0].x, 0);
+  assert.equal(mappedFloor.verticalConnectors?.[1].position.x, 11);
+});
 
 test("projectEditorStateForRenderer projects editor state into the stable renderer snapshot shape", () => {
   const project = createEditorProject({

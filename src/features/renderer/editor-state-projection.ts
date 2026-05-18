@@ -65,7 +65,7 @@ export function projectEditorStateForRenderer(
     projectId: project.projectId,
     projectName: project.projectName,
     objectVersion: project.objectVersion,
-    floors: project.floors.map(projectFloorForRenderer),
+    floors: project.floors.map((floor) => mapEditorFloorToRendererSnapshotFloor(floor)),
     viewState: {
       activeFloorId: project.viewState.activeFloorId,
       selectedRoomId: project.viewState.selectedRoomId,
@@ -73,20 +73,32 @@ export function projectEditorStateForRenderer(
   });
 }
 
-function projectFloorForRenderer(floor: EditorFloor): RendererSnapshotFloor {
+export function mapEditorFloorToRendererSnapshotFloor(
+  floor: EditorFloor,
+  mappedRooms: readonly RendererSnapshotRoom[] = floor.rooms.map(
+    mapEditorRoomToRendererSnapshotRoom,
+  ),
+): RendererSnapshotFloor {
+  const rooms = [...mappedRooms]
+    .sort((left, right) => left.roomId.localeCompare(right.roomId))
+    .map(cloneRendererSnapshotRoom);
+  const verticalConnectors = [...(floor.verticalConnectors ?? [])]
+    .sort((left, right) => left.connectorId.localeCompare(right.connectorId))
+    .map(projectVerticalConnectorForRenderer);
+
   return {
     floorId: floor.floorId,
     floorName: floor.floorName,
     floorHeight: floor.floorHeight,
     referenceImage: floor.referenceImage,
-    rooms: floor.rooms.map(projectRoomForRenderer),
-    verticalConnectors: (floor.verticalConnectors ?? []).map(
-      projectVerticalConnectorForRenderer,
-    ),
+    rooms,
+    verticalConnectors,
   };
 }
 
-function projectRoomForRenderer(room: EditorRoom): RendererSnapshotRoom {
+export function mapEditorRoomToRendererSnapshotRoom(
+  room: EditorRoom,
+): RendererSnapshotRoom {
   return {
     roomId: room.roomId,
     roomName: room.roomName,
@@ -144,10 +156,56 @@ function projectVerticalConnectorForRenderer(
   };
 }
 
+function cloneRendererSnapshotRoom(
+  room: RendererSnapshotRoom,
+): RendererSnapshotRoom {
+  return {
+    roomId: room.roomId,
+    roomName: room.roomName,
+    roomPolygon: room.roomPolygon.map(clonePoint),
+    sharedBoundaries: room.sharedBoundaries.map(cloneRendererSharedBoundary),
+    area: room.area,
+    labelPosition: room.labelPosition == null ? null : clonePoint(room.labelPosition),
+    walls: room.walls?.map(cloneRendererWallSegment) ?? [],
+    openings: room.openings?.map(cloneRendererOpening) ?? [],
+  };
+}
+
 function clonePoint(point: EditorPoint): RendererSnapshotPoint {
   return {
     x: point.x,
     y: point.y,
+  };
+}
+
+function cloneRendererSharedBoundary(
+  boundary: RendererSnapshotSharedBoundary,
+): RendererSnapshotSharedBoundary {
+  return {
+    edgeId: boundary.edgeId,
+    adjacentRoomId: boundary.adjacentRoomId,
+    adjacentEdgeId: boundary.adjacentEdgeId,
+  };
+}
+
+function cloneRendererOpening(
+  opening: RendererSnapshotOpening,
+): RendererSnapshotOpening {
+  return {
+    openingId: opening.openingId,
+    openingType: opening.openingType,
+    attachedEdgeId: opening.attachedEdgeId,
+    edgeRelativePosition: opening.edgeRelativePosition,
+  };
+}
+
+function cloneRendererWallSegment(
+  wall: RendererSnapshotWallSegment,
+): RendererSnapshotWallSegment {
+  return {
+    edgeId: wall.edgeId,
+    start: clonePoint(wall.start),
+    end: clonePoint(wall.end),
   };
 }
 

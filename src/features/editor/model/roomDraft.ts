@@ -1,10 +1,8 @@
-import { closeRoomOutline } from './roomPolygonClosure.ts';
-import { validateMinimumRoomPolygonVertices } from './roomPolygonMinimumVertexValidation.ts';
-import { normalizeRoomPolygonPoints } from './roomPolygonNormalization.ts';
 import {
-  validateRoomPolygon,
-  type RoomPolygonValidationFailure,
-} from './roomPolygonValidation.ts';
+  normalizeRoomPolygonInput,
+  normalizeRoomPolygonPoints,
+} from './roomPolygonNormalization.ts';
+import { type RoomPolygonValidationFailure } from './roomPolygonValidation.ts';
 import { createRoomObjectFromClosedPolygon } from './roomObjectInstantiation.ts';
 import {
   insertRoomPolygonVertexWithInvariantValidation,
@@ -113,27 +111,22 @@ export const createRoomPolygonFromOrderedPoints = (
 export const finalizeRoomDraftPolygon = (
   draft: RoomDraftPolygon,
 ): RoomPolygon => {
-  if (draft.points.length < 3) {
-    throw new Error('A room polygon requires at least 3 points.');
-  }
+  const normalized = normalizeRoomPolygonInput(draft.points);
 
-  const normalizedPoints = closeRoomOutline(draft.points);
+  if (!normalized.ok) {
+    if (normalized.error === 'polygon_requires_three_points') {
+      throw new Error('A room polygon requires at least 3 points.');
+    }
 
-  const minimumVertexValidation =
-    validateMinimumRoomPolygonVertices(normalizedPoints);
+    if (normalized.error === 'polygon_requires_three_distinct_vertices') {
+      throw new Error('A room polygon requires at least 3 distinct vertices.');
+    }
 
-  if (!minimumVertexValidation.ok) {
-    throw new Error('A room polygon requires at least 3 distinct vertices.');
-  }
-
-  const validation = validateRoomPolygon(normalizedPoints);
-
-  if (!validation.ok) {
-    if (validation.error === 'polygon_points_must_be_finite') {
+    if (normalized.error === 'polygon_points_must_be_finite') {
       throw new Error('A room polygon point must use finite x/y coordinates.');
     }
 
-    if (validation.error === 'polygon_self_intersects') {
+    if (normalized.error === 'polygon_self_intersects') {
       throw new Error('A room polygon must not self-intersect.');
     }
 
@@ -142,7 +135,7 @@ export const finalizeRoomDraftPolygon = (
 
   return {
     roomId: draft.roomId,
-    points: normalizeRoomPolygonPoints(normalizedPoints),
+    points: normalized.points,
   };
 };
 

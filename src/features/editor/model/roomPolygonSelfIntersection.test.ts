@@ -31,3 +31,18 @@ test('roomPolygonHasSelfIntersection returns false for a simple closed polygon',
     false,
   );
 });
+
+test('roomPolygonHasSelfIntersection returns true when canonical polygon edges overlap at floating-point precision', () => {
+  assert.equal(
+    roomPolygonHasSelfIntersection([
+      { x: 0, y: 0 },
+      { x: 6.5, y: 0 },
+      { x: 2.5, y: 4.25 },
+      { x: 6.5, y: 4.25 },
+      { x: 0, y: 4.25 },
+      { x: 2.5, y: -1e-10 },
+      { x: 0, y: 0 },
+    ]),
+    true,
+  );
+});

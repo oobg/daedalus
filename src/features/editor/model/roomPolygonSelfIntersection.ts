@@ -3,6 +3,8 @@ export interface PolygonPoint2D {
   readonly y: number;
 }
 
+const GEOMETRY_EPSILON = 1e-9;
+
 const crossProduct = (
   origin: PolygonPoint2D,
   left: PolygonPoint2D,
@@ -22,12 +24,14 @@ const isPointOnSegment = (
   const maxY = Math.max(start.y, end.y);
 
   return (
-    point.x >= minX &&
-    point.x <= maxX &&
-    point.y >= minY &&
-    point.y <= maxY
+    point.x >= minX - GEOMETRY_EPSILON &&
+    point.x <= maxX + GEOMETRY_EPSILON &&
+    point.y >= minY - GEOMETRY_EPSILON &&
+    point.y <= maxY + GEOMETRY_EPSILON
   );
 };
+
+const isZero = (value: number): boolean => Math.abs(value) <= GEOMETRY_EPSILON;
 
 const segmentsIntersect = (
   startA: PolygonPoint2D,
@@ -41,27 +45,27 @@ const segmentsIntersect = (
   const orientation4 = crossProduct(startB, endB, endA);
 
   if (
-    ((orientation1 > 0 && orientation2 < 0) ||
-      (orientation1 < 0 && orientation2 > 0)) &&
-    ((orientation3 > 0 && orientation4 < 0) ||
-      (orientation3 < 0 && orientation4 > 0))
+    ((orientation1 > GEOMETRY_EPSILON && orientation2 < -GEOMETRY_EPSILON) ||
+      (orientation1 < -GEOMETRY_EPSILON && orientation2 > GEOMETRY_EPSILON)) &&
+    ((orientation3 > GEOMETRY_EPSILON && orientation4 < -GEOMETRY_EPSILON) ||
+      (orientation3 < -GEOMETRY_EPSILON && orientation4 > GEOMETRY_EPSILON))
   ) {
     return true;
   }
 
-  if (orientation1 === 0 && isPointOnSegment(startB, startA, endA)) {
+  if (isZero(orientation1) && isPointOnSegment(startB, startA, endA)) {
     return true;
   }
 
-  if (orientation2 === 0 && isPointOnSegment(endB, startA, endA)) {
+  if (isZero(orientation2) && isPointOnSegment(endB, startA, endA)) {
     return true;
   }
 
-  if (orientation3 === 0 && isPointOnSegment(startA, startB, endB)) {
+  if (isZero(orientation3) && isPointOnSegment(startA, startB, endB)) {
     return true;
   }
 
-  if (orientation4 === 0 && isPointOnSegment(endA, startB, endB)) {
+  if (isZero(orientation4) && isPointOnSegment(endA, startB, endB)) {
     return true;
   }
 

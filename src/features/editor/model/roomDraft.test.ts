@@ -258,6 +258,7 @@ test('finalizeRoomDraftPolygon rejects drafts with fewer than 3 distinct vertice
   const draft = collectRoomDraftPoints('room-7', [
     { x: 1, y: 1 },
     { x: 4, y: 1 },
+    { x: 4, y: 1 },
     { x: 1, y: 1 },
   ]);
 

@@ -1,4 +1,9 @@
-import type { Point2D } from './roomPolygonValidation.ts';
+import { closeRoomOutline } from './roomPolygonClosure.ts';
+import {
+  validateRoomPolygon,
+  type Point2D,
+  type RoomPolygonValidationError,
+} from './roomPolygonValidation.ts';
 
 const pointsMatch = (left: Point2D, right: Point2D): boolean =>
   left.x === right.x && left.y === right.y;
@@ -31,7 +36,7 @@ const rotatePoints = <Point extends Point2D>(
   ...points.slice(0, startIndex),
 ];
 
-export const normalizeRoomPolygonPoints = <Point extends Point2D>(
+const toCanonicalRoomPolygonPoints = <Point extends Point2D>(
   points: readonly Point[],
 ): Point[] => {
   if (points.length === 0) {
@@ -69,4 +74,58 @@ export const normalizeRoomPolygonPoints = <Point extends Point2D>(
   );
 
   return [...orderedPoints, orderedPoints[0]];
+};
+
+export type RoomPolygonNormalizationError = Exclude<
+  RoomPolygonValidationError,
+  'polygon_must_be_closed'
+>;
+
+export type NormalizeRoomPolygonResult<Point extends Point2D = Point2D> =
+  | {
+      readonly ok: true;
+      readonly points: Point[];
+    }
+  | {
+      readonly ok: false;
+      readonly error: RoomPolygonNormalizationError;
+    };
+
+export const normalizeRoomPolygonInput = <Point extends Point2D>(
+  points: readonly Point[],
+): NormalizeRoomPolygonResult<Point> => {
+  const closedPoints = closeRoomOutline(points);
+  const validation = validateRoomPolygon(closedPoints);
+
+  if (!validation.ok) {
+    if (validation.error === 'polygon_must_be_closed') {
+      throw new Error(
+        'normalizeRoomPolygonInput received an unexpectedly open polygon after closure.',
+      );
+    }
+
+    return {
+      ok: false,
+      error: validation.error,
+    };
+  }
+
+  return {
+    ok: true,
+    points: toCanonicalRoomPolygonPoints(closedPoints),
+  };
+};
+
+export const normalizeRoomPolygonPoints = <Point extends Point2D>(
+  points: readonly Point[],
+): Point[] => {
+  const normalized = normalizeRoomPolygonInput(points);
+
+  if (!normalized.ok) {
+    throw new Error(
+      `normalizeRoomPolygonPoints requires a valid polygon input. Received "${normalized.error}".`,
+    );
+  }
+
+  return normalized.points;
 };

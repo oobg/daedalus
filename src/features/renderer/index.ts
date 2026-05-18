@@ -63,6 +63,8 @@ export {
 } from "./floor-render-primitives.ts";
 export {
   createReadonlyEditorStateProjection,
+  mapEditorFloorToRendererSnapshotFloor,
+  mapEditorRoomToRendererSnapshotRoom,
   projectEditorStateForRenderer,
   serializeEditorStateProjection,
   type EditorStateProjectionOptions,

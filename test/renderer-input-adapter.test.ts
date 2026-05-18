@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createEditorProject } from "../src/domain/editor-state.ts";
 import {
   adaptProjectSnapshotToRenderScene,
+  projectEditorStateForRenderer,
   type RendererSnapshotProject,
 } from "../src/features/renderer/index.ts";
 
@@ -256,6 +258,362 @@ test("adaptProjectSnapshotToRenderScene clones editor snapshot data into render-
         verticalConnectors: [],
       },
     ],
+  });
+});
+
+test("adaptProjectSnapshotToRenderScene assembles a full render model from editor-owned floor and room data without mutating inputs", () => {
+  const editorProject = createEditorProject({
+    projectId: "project-harbor",
+    projectName: "Harbor Annex",
+    objectVersion: 4,
+    floors: [
+      {
+        floorId: "floor-b1",
+        floorName: "Basement",
+        floorHeight: 2.75,
+        referenceImage: "floor-plan://project-harbor/floor-b1.png",
+        rooms: [
+          {
+            roomId: "room-storage",
+            roomName: "Storage",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 3 },
+              { x: 0, y: 3 },
+            ],
+            sharedBoundaries: [
+              {
+                edgeId: "room-storage:edge:1",
+                roomId: "room-storage",
+                adjacentRoomId: "room-stair",
+                adjacentEdgeId: "room-stair:edge:3",
+              },
+            ],
+            edgeOpenings: [
+              {
+                openingId: "opening-storage-door",
+                openingType: "door",
+                attachedEdgeId: "room-storage:edge:1",
+                edgeRelativePosition: 0.5,
+              },
+            ],
+          },
+          {
+            roomId: "room-stair",
+            roomName: "Stair",
+            roomPolygon: [
+              { x: 4, y: 0 },
+              { x: 6, y: 0 },
+              { x: 6, y: 3 },
+              { x: 4, y: 3 },
+            ],
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-stair-b1",
+            connectorType: "stair",
+            roomId: "room-stair",
+            targetFloorId: "floor-1",
+            position: { x: 5, y: 1.5 },
+          },
+        ],
+      },
+      {
+        floorId: "floor-1",
+        floorName: "Ground",
+        floorHeight: 3.25,
+        referenceImage: null,
+        rooms: [
+          {
+            roomId: "room-lobby",
+            roomName: "Lobby",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 7, y: 0 },
+              { x: 7, y: 5 },
+              { x: 0, y: 5 },
+            ],
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      selectedRoomId: "room-lobby",
+    },
+  });
+
+  const snapshot = projectEditorStateForRenderer(editorProject);
+  const snapshotBeforeAdapt = structuredClone(snapshot);
+
+  const scene = adaptProjectSnapshotToRenderScene(snapshot);
+
+  assert.deepEqual(snapshot, snapshotBeforeAdapt);
+
+  assert.deepEqual(scene, {
+    projectId: "project-harbor",
+    projectName: "Harbor Annex",
+    objectVersion: 4,
+    activeFloorId: "floor-1",
+    selectedRoomId: "room-lobby",
+    floors: [
+      {
+        floorId: "floor-b1",
+        floorName: "Basement",
+        floorHeight: 2.75,
+        verticalOffset: 0,
+        renderHeight: 0.825,
+        renderVerticalOffset: 0,
+        referenceImage: "floor-plan://project-harbor/floor-b1.png",
+        isActive: false,
+        rooms: [
+          {
+            roomId: "room-stair",
+            roomName: "Stair",
+            polygon: [
+              { x: 4, y: 0 },
+              { x: 6, y: 0 },
+              { x: 6, y: 3 },
+              { x: 4, y: 3 },
+            ],
+            boundaries: [],
+            area: 6,
+            labelPosition: { x: 5, y: 1.5 },
+            bounds: {
+              minX: 4,
+              minY: 0,
+              maxX: 6,
+              maxY: 3,
+            },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
+            },
+            walls: [
+              {
+                edgeId: "room-stair:edge:0",
+                start: { x: 4, y: 0 },
+                end: { x: 6, y: 0 },
+              },
+              {
+                edgeId: "room-stair:edge:1",
+                start: { x: 6, y: 0 },
+                end: { x: 6, y: 3 },
+              },
+              {
+                edgeId: "room-stair:edge:2",
+                start: { x: 6, y: 3 },
+                end: { x: 4, y: 3 },
+              },
+              {
+                edgeId: "room-stair:edge:3",
+                start: { x: 4, y: 3 },
+                end: { x: 4, y: 0 },
+              },
+            ],
+            openings: [],
+          },
+          {
+            roomId: "room-storage",
+            roomName: "Storage",
+            polygon: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 3 },
+              { x: 0, y: 3 },
+            ],
+            boundaries: [
+              {
+                edgeId: "room-storage:edge:1",
+                adjacentRoomId: "room-stair",
+                adjacentEdgeId: "room-stair:edge:3",
+              },
+            ],
+            area: 12,
+            labelPosition: { x: 2, y: 1.5 },
+            bounds: {
+              minX: 0,
+              minY: 0,
+              maxX: 4,
+              maxY: 3,
+            },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
+            },
+            walls: [
+              {
+                edgeId: "room-storage:edge:0",
+                start: { x: 0, y: 0 },
+                end: { x: 4, y: 0 },
+              },
+              {
+                edgeId: "room-storage:edge:1",
+                start: { x: 4, y: 0 },
+                end: { x: 4, y: 3 },
+              },
+              {
+                edgeId: "room-storage:edge:2",
+                start: { x: 4, y: 3 },
+                end: { x: 0, y: 3 },
+              },
+              {
+                edgeId: "room-storage:edge:3",
+                start: { x: 0, y: 3 },
+                end: { x: 0, y: 0 },
+              },
+            ],
+            openings: [
+              {
+                openingId: "opening-storage-door",
+                openingType: "door",
+                attachedEdgeId: "room-storage:edge:1",
+                edgeRelativePosition: 0.5,
+                anchor: { x: 4, y: 1.5 },
+              },
+            ],
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-stair-b1",
+            connectorType: "stair",
+            roomId: "room-stair",
+            targetFloorId: "floor-1",
+            position: { x: 5, y: 1.5 },
+          },
+        ],
+      },
+      {
+        floorId: "floor-1",
+        floorName: "Ground",
+        floorHeight: 3.25,
+        verticalOffset: 2.75,
+        renderHeight: 0.975,
+        renderVerticalOffset: 0.825,
+        referenceImage: null,
+        isActive: true,
+        rooms: [
+          {
+            roomId: "room-lobby",
+            roomName: "Lobby",
+            polygon: [
+              { x: 0, y: 0 },
+              { x: 7, y: 0 },
+              { x: 7, y: 5 },
+              { x: 0, y: 5 },
+            ],
+            boundaries: [],
+            area: 35,
+            labelPosition: { x: 3.5, y: 2.5 },
+            bounds: {
+              minX: 0,
+              minY: 0,
+              maxX: 7,
+              maxY: 5,
+            },
+            layers: {
+              floor: {
+                elementClass: "floor",
+                order: 0,
+                baseElevation: -0.01575,
+              },
+              furniture: {
+                elementClass: "furniture",
+                order: 1,
+                baseElevation: -0.00175,
+              },
+              wall: {
+                elementClass: "wall",
+                order: 2,
+                baseElevation: 0.014,
+              },
+            },
+            walls: [
+              {
+                edgeId: "room-lobby:edge:0",
+                start: { x: 0, y: 0 },
+                end: { x: 7, y: 0 },
+              },
+              {
+                edgeId: "room-lobby:edge:1",
+                start: { x: 7, y: 0 },
+                end: { x: 7, y: 5 },
+              },
+              {
+                edgeId: "room-lobby:edge:2",
+                start: { x: 7, y: 5 },
+                end: { x: 0, y: 5 },
+              },
+              {
+                edgeId: "room-lobby:edge:3",
+                start: { x: 0, y: 5 },
+                end: { x: 0, y: 0 },
+              },
+            ],
+            openings: [],
+          },
+        ],
+        verticalConnectors: [],
+      },
+    ],
+  });
+
+  assert.notStrictEqual(scene.floors, snapshot.floors);
+  assert.notStrictEqual(scene.floors[0], snapshot.floors[0]);
+  assert.notStrictEqual(scene.floors[0].rooms, snapshot.floors[0].rooms);
+  assert.notStrictEqual(scene.floors[0].rooms[1].polygon, snapshot.floors[0].rooms[1].roomPolygon);
+  assert.notStrictEqual(scene.floors[0].rooms[1].boundaries, snapshot.floors[0].rooms[1].sharedBoundaries);
+  assert.notStrictEqual(scene.floors[0].rooms[1].walls, snapshot.floors[0].rooms[1].walls);
+  assert.notStrictEqual(scene.floors[0].rooms[1].openings, snapshot.floors[0].rooms[1].openings);
+  assert.notStrictEqual(
+    scene.floors[0].verticalConnectors,
+    snapshot.floors[0].verticalConnectors,
+  );
+
+  editorProject.floors[0].rooms[0].roomPolygon[1].x = 99;
+  editorProject.floors[0].rooms[0].sharedBoundaries[0].adjacentRoomId =
+    "room-mutated";
+  editorProject.floors[0].rooms[0].edgeOpenings?.[0] &&
+    (editorProject.floors[0].rooms[0].edgeOpenings[0].edgeRelativePosition = 0.9);
+  editorProject.floors[0].verticalConnectors?.[0] &&
+    (editorProject.floors[0].verticalConnectors[0].position.y = 99);
+
+  assert.deepEqual(snapshot, snapshotBeforeAdapt);
+  assert.deepEqual(scene.floors[0].rooms[1].polygon[1], { x: 4, y: 0 });
+  assert.equal(scene.floors[0].rooms[1].boundaries[0].adjacentRoomId, "room-stair");
+  assert.equal(scene.floors[0].rooms[1].openings[0].edgeRelativePosition, 0.5);
+  assert.deepEqual(scene.floors[0].verticalConnectors[0].position, {
+    x: 5,
+    y: 1.5,
   });
 });
 

@@ -1,5 +1,8 @@
+import {
+  validateRoomPolygonStructure,
+  type RoomPolygonStructuralValidationError,
+} from './roomPolygonStructuralValidation.ts';
 import { roomPolygonHasSelfIntersection } from './roomPolygonSelfIntersection.ts';
-import { validateMinimumRoomPolygonVertices } from './roomPolygonMinimumVertexValidation.ts';
 import { validateRoomPolygonZeroArea } from './roomPolygonZeroAreaValidation.ts';
 
 export interface Point2D {
@@ -8,10 +11,7 @@ export interface Point2D {
 }
 
 export type RoomPolygonValidationError =
-  | 'polygon_requires_three_points'
-  | 'polygon_points_must_be_finite'
-  | 'polygon_must_be_closed'
-  | 'polygon_requires_three_distinct_vertices'
+  | RoomPolygonStructuralValidationError
   | 'polygon_area_must_be_non_zero'
   | 'polygon_self_intersects';
 
@@ -39,46 +39,18 @@ export type RoomPolygonOperationValidationResult =
       readonly validation: RoomPolygonValidationFailure;
     };
 
-const pointsMatch = (left: Point2D, right: Point2D): boolean =>
-  left.x === right.x && left.y === right.y;
-
 export const hasSelfIntersection = (points: readonly Point2D[]): boolean =>
   roomPolygonHasSelfIntersection(points);
 
 export const validateRoomPolygon = (
   points: readonly Point2D[],
 ): ValidateRoomPolygonResult => {
-  if (points.length < 4) {
+  const structuralValidation = validateRoomPolygonStructure(points);
+
+  if (!structuralValidation.ok) {
     return {
       ok: false,
-      error: 'polygon_requires_three_points',
-    };
-  }
-
-  if (
-    points.some(
-      (point) => !Number.isFinite(point.x) || !Number.isFinite(point.y),
-    )
-  ) {
-    return {
-      ok: false,
-      error: 'polygon_points_must_be_finite',
-    };
-  }
-
-  if (!pointsMatch(points[0], points[points.length - 1])) {
-    return {
-      ok: false,
-      error: 'polygon_must_be_closed',
-    };
-  }
-
-  const minimumVertexValidation = validateMinimumRoomPolygonVertices(points);
-
-  if (!minimumVertexValidation.ok) {
-    return {
-      ok: false,
-      error: minimumVertexValidation.error,
+      error: structuralValidation.error,
     };
   }
 
