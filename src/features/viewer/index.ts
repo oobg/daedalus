@@ -109,8 +109,13 @@ export {
   type ValidateViewerExportCompositionInputResult,
   type ViewerExportCompositionValidationIssue,
 } from "./viewer-export-composition-guard.ts";
-export { type RenderSceneData } from "../renderer/renderer-contract.ts";
+export { type ReadonlyRenderSceneData, type RenderSceneData } from "../renderer/renderer-contract.ts";
 export { type RendererPort } from "../renderer/renderer-entrypoint.ts";
+export {
+  defineViewerExportRendererInput,
+  type ViewerExportRenderModel,
+  type ViewerExportRendererInput,
+} from "../renderer/viewer-export-renderer-input-contract.ts";
 export {
   assertFurnitureAssetReference,
   validateFurnitureAssetReference,

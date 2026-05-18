@@ -201,6 +201,8 @@ export interface RenderSceneData {
   floors: readonly RenderSceneFloor[];
 }
 
+export type ReadonlyRenderSceneData = DeepReadonly<RenderSceneData>;
+
 export interface RenderAssetLabelMetadata {
   text: string;
   position: RenderScenePoint;

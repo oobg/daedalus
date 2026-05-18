@@ -132,4 +132,5 @@ function registerExtension<
 
   registry.set(registrationKey, extension);
   extensionIds.add(extension.extensionId);
+  return extension;
 }

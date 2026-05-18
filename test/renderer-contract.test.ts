@@ -6,6 +6,7 @@ import {
   adaptProjectSnapshotToRenderScene,
   adaptReadonlyEditorStateProjectionToRenderScene,
   createRendererEntrypoint,
+  defineViewerExportRendererInput,
   renderProjectSnapshot,
   type RendererSnapshotProject,
   type RenderSceneData,
@@ -15,6 +16,7 @@ test("renderer public API exposes the stable contract and adapter entrypoint", (
   assert.equal(typeof adaptProjectSnapshotToRenderScene, "function");
   assert.equal(typeof adaptReadonlyEditorStateProjectionToRenderScene, "function");
   assert.equal(typeof createRendererEntrypoint, "function");
+  assert.equal(typeof defineViewerExportRendererInput, "function");
   assert.equal(typeof renderProjectSnapshot, "function");
   assert.deepEqual(RENDERER_CONTRACT_FIELDS.snapshotProject, [
     "projectId",

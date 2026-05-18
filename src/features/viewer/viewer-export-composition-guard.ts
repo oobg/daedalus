@@ -1,4 +1,4 @@
-import type { RendererPort } from "../renderer/renderer-entrypoint.ts";
+import type { ViewerExportRendererInput } from "../renderer/viewer-export-renderer-input-contract.ts";
 
 export interface ViewerExportCompositionValidationIssue {
   path: string;
@@ -58,8 +58,8 @@ export function validateViewerExportCompositionInput(
 }
 
 export function assertViewerExportCompositionInput<Output>(
-  renderer: RendererPort<Output>,
-): RendererPort<Output> {
+  renderer: ViewerExportRendererInput<Output>,
+): ViewerExportRendererInput<Output> {
   const result = validateViewerExportCompositionInput(renderer);
 
   if (result.ok) {

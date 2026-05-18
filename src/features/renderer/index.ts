@@ -9,6 +9,7 @@ export {
   type ReadonlyRendererSnapshotOpening,
   type ReadonlyRendererSnapshotPoint,
   type ReadonlyRendererSnapshotProject,
+  type ReadonlyRenderSceneData,
   type ReadonlyRendererSnapshotRoom,
   type ReadonlyRendererSnapshotSharedBoundary,
   type ReadonlyRendererSnapshotVerticalConnector,
@@ -41,6 +42,11 @@ export {
   type RenderSceneWallSegment,
   type SerializedEditorStateProjection,
 } from "./renderer-contract.ts";
+export {
+  defineViewerExportRendererInput,
+  type ViewerExportRenderModel,
+  type ViewerExportRendererInput,
+} from "./viewer-export-renderer-input-contract.ts";
 export {
   createRendererEntrypoint,
   renderProjectSnapshot,

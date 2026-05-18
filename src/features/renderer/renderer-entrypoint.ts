@@ -1,15 +1,14 @@
 import type {
+  ReadonlyRenderSceneData,
   ReadonlyRendererSnapshotProject,
-  RenderSceneData,
 } from "./renderer-contract.ts";
+import type { ViewerExportRendererInput } from "./viewer-export-renderer-input-contract.ts";
 import { adaptProjectSnapshotToRenderScene } from "./renderer-input-adapter.ts";
 
-export interface RendererPort<Output> {
-  render(scene: Readonly<RenderSceneData>): Output;
-}
+export type RendererPort<Output> = ViewerExportRendererInput<Output>;
 
 export interface RendererEntrypoint<Output> {
-  renderScene(scene: Readonly<RenderSceneData>): Output;
+  renderScene(scene: ReadonlyRenderSceneData): Output;
   renderProjectSnapshot(project: ReadonlyRendererSnapshotProject): Output;
 }
 

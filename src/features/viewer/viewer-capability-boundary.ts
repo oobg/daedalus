@@ -1,21 +1,21 @@
-import type { RenderSceneData } from "../renderer/renderer-contract.ts";
-import type { RendererPort } from "../renderer/renderer-entrypoint.ts";
+import type { ReadonlyRenderSceneData } from "../renderer/renderer-contract.ts";
+import type { ViewerExportRendererInput } from "../renderer/viewer-export-renderer-input-contract.ts";
 import { assertViewerExportCompositionInput } from "./viewer-export-composition-guard.ts";
 
 export interface LoadedViewerScene<Output> {
-  getScene(): Readonly<RenderSceneData>;
+  getScene(): ReadonlyRenderSceneData;
   render(): Output;
 }
 
 export interface ViewerComposition<Output> {
   createLoadedSceneViewer(
-    scene: Readonly<RenderSceneData>,
+    scene: ReadonlyRenderSceneData,
   ): LoadedViewerScene<Output>;
-  renderScene(scene: Readonly<RenderSceneData>): Output;
+  renderScene(scene: ReadonlyRenderSceneData): Output;
 }
 
 export function createViewerComposition<Output>(
-  renderer: RendererPort<Output>,
+  renderer: ViewerExportRendererInput<Output>,
 ): ViewerComposition<Output> {
   const guardedRenderer = assertViewerExportCompositionInput(renderer);
 
@@ -39,8 +39,8 @@ export function createViewerComposition<Output>(
 }
 
 function cloneRenderScene(
-  scene: Readonly<RenderSceneData>,
-): Readonly<RenderSceneData> {
+  scene: ReadonlyRenderSceneData,
+): ReadonlyRenderSceneData {
   return deepFreeze({
     projectId: scene.projectId,
     projectName: scene.projectName,
