@@ -2,9 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
-import Toolbar from "@/components/organisms/Toolbar";
-import FloorSidebar from "@/components/organisms/FloorSidebar";
-import PropertyPanel from "@/components/organisms/PropertyPanel";
 import {
   EditorShell,
   type EditorViewMode,
@@ -14,7 +11,10 @@ import { useEditorStore } from "@/store/editorStore";
 import { projectEditorStateForRenderer, adaptProjectSnapshotToRenderScene } from "@/features/renderer";
 import { buildFloorGuideSvgExport } from "@/features/project-export/floor-guide-svg-export";
 
-const Viewer25D = dynamic(() => import("@/components/viewer/Viewer25D"), { ssr: false });
+const Toolbar      = dynamic(() => import("@/components/organisms/Toolbar"),      { ssr: false });
+const FloorSidebar = dynamic(() => import("@/components/organisms/FloorSidebar"), { ssr: false });
+const PropertyPanel = dynamic(() => import("@/components/organisms/PropertyPanel"), { ssr: false });
+const Viewer25D    = dynamic(() => import("@/components/viewer/Viewer25D"),        { ssr: false });
 
 export default function EditorPage() {
   const [viewMode, setViewMode] = useState<EditorViewMode>("edit");
