@@ -6,7 +6,7 @@ import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 
-import { EditorShell } from "./EditorShell.ts";
+import { EditorShell } from "./EditorShell.tsx";
 import { createEditorProject } from "../../domain/editor-state.ts";
 import {
   DEFAULT_WALL_HEIGHT_SCALE,

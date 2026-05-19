@@ -1,5 +1,4 @@
 import React, {
-  createElement,
   isValidElement,
   type ChangeEvent,
   type ReactElement,
@@ -37,44 +36,39 @@ export function FloorHeightInput({
   onFloorHeightChange,
   onInputBlur,
 }: FloorHeightInputProps): ReactElement {
-  return createElement(
-    "div",
-    { className: "space-y-1" },
-    createElement(
-      "label",
-      {
-        htmlFor: inputId,
-        className: "text-[11px] text-text-muted",
-      },
-      "높이 (m)",
-    ),
-    createElement("input", {
-      id: inputId,
-      type: "number",
-      min: 0.5,
-      step: 0.5,
-      value,
-      onChange: (event: ChangeEvent<HTMLInputElement>) => {
-        const nextValue = event.target.value;
+  return (
+    <div className="space-y-1">
+      <label htmlFor={inputId} className="text-[11px] text-text-muted">
+        높이 (m)
+      </label>
+      <input
+        id={inputId}
+        type="number"
+        min={0.5}
+        step={0.5}
+        value={value}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => {
+          const nextValue = event.target.value;
 
-        onInputChange(nextValue);
+          onInputChange(nextValue);
 
-        const nextFloorHeight = parseFloorHeightEditorValue(nextValue);
+          const nextFloorHeight = parseFloorHeightEditorValue(nextValue);
 
-        if (nextFloorHeight !== null) {
-          onFloorHeightChange(nextFloorHeight);
-        }
-      },
-      onBlur: onInputBlur,
-      className: cn(
-        "flex h-7 w-full rounded-md border border-border-default bg-surface-2",
-        "px-2.5 py-1.5 text-sm text-text-primary",
-        "placeholder:text-text-disabled",
-        "transition-colors duration-75",
-        "focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-      ),
-    }),
+          if (nextFloorHeight !== null) {
+            onFloorHeightChange(nextFloorHeight);
+          }
+        }}
+        onBlur={onInputBlur}
+        className={cn(
+          "flex h-7 w-full rounded-md border border-border-default bg-surface-2",
+          "px-2.5 py-1.5 text-sm text-text-primary",
+          "placeholder:text-text-disabled",
+          "transition-colors duration-75",
+          "focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+        )}
+      />
+    </div>
   );
 }
 

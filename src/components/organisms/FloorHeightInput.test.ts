@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   findFloorHeightInput,
   FloorHeightInput,
-} from "./FloorHeightInput.ts";
+} from "./FloorHeightInput.tsx";
 
 test("FloorHeightInput renders the selected floor height value", () => {
   const tree = FloorHeightInput({

@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   FloorSelection,
   collectFloorSelectionButtons,
-} from "./FloorSelection.ts";
+} from "./FloorSelection.tsx";
 
 const floors = [
   { floorId: "floor-1", floorName: "Ground", floorHeight: 3 },

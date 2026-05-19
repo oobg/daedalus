@@ -1,8 +1,8 @@
-import React, { createElement, type ReactElement } from "react";
+import React, { type ReactElement } from "react";
 
 import type { EditorFloor } from "../../domain/editor-state.ts";
-import { FloorHeightInput } from "./FloorHeightInput.ts";
-import { FloorSelection } from "./FloorSelection.ts";
+import { FloorHeightInput } from "./FloorHeightInput.tsx";
+import { FloorSelection } from "./FloorSelection.tsx";
 
 export interface FloorHeightConfigurationProps {
   floors: readonly Pick<EditorFloor, "floorId" | "floorName" | "floorHeight">[];
@@ -28,37 +28,33 @@ export function FloorHeightConfiguration({
 }: FloorHeightConfigurationProps): ReactElement {
   const activeFloor = floors.find((floor) => floor.floorId === activeFloorId) ?? null;
 
-  return createElement(
-    "div",
-    { className: "space-y-3" },
-    createElement(FloorSelection, {
-      floors,
-      activeFloorId,
-      onSelectFloor,
-    }),
-    activeFloor
-      ? createElement(
-          "div",
-          { className: "space-y-2" },
-          createElement(
-            "p",
-            { className: "text-micro text-text-muted uppercase tracking-[0.08em] font-semibold" },
-            "층 높이",
-          ),
-          createElement(FloorHeightInput, {
-            value: floorHeightInput,
-            onInputChange: onFloorHeightInputChange,
-            onFloorHeightChange: (floorHeight) => {
+  return (
+    <div className="space-y-3">
+      <FloorSelection
+        floors={floors}
+        activeFloorId={activeFloorId}
+        onSelectFloor={onSelectFloor}
+      />
+      {activeFloor && (
+        <div className="space-y-2">
+          <p className="text-micro text-text-muted uppercase tracking-[0.08em] font-semibold">
+            층 높이
+          </p>
+          <FloorHeightInput
+            value={floorHeightInput}
+            onInputChange={onFloorHeightInputChange}
+            onFloorHeightChange={(floorHeight) => {
               onFloorHeightChange({
                 floorId: activeFloor.floorId,
                 floorHeight,
               });
-            },
-            onInputBlur: () => {
+            }}
+            onInputBlur={() => {
               onFloorHeightInputBlur?.(activeFloor.floorId);
-            },
-          }),
-        )
-      : null,
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }

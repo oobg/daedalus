@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import {
   EditorShell,
   type EditorViewMode,
-} from "@/components/editor/EditorShell.ts";
+} from "@/components/editor/EditorShell.tsx";
 import { resolveEditorSceneRootLifecycleState } from "@/components/editor/editorSceneRootLifecycle.ts";
 import { useEditorStore } from "@/store/editorStore";
 import { projectEditorStateForRenderer, adaptProjectSnapshotToRenderScene } from "@/features/renderer";

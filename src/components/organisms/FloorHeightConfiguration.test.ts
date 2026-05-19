@@ -11,11 +11,11 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { createEditorStore } from "../../store/createEditorStore.ts";
-import { findFloorHeightInput } from "./FloorHeightInput.ts";
+import { findFloorHeightInput } from "./FloorHeightInput.tsx";
 import {
   FloorHeightConfiguration,
-} from "./FloorHeightConfiguration.ts";
-import { collectFloorSelectionButtons } from "./FloorSelection.ts";
+} from "./FloorHeightConfiguration.tsx";
+import { collectFloorSelectionButtons } from "./FloorSelection.tsx";
 
 const floors = [
   { floorId: "floor-1", floorName: "Ground", floorHeight: 3 },
