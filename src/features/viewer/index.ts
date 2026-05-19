@@ -72,6 +72,11 @@ export {
   type WallMeshAssemblyOptions,
 } from "./wall-mesh-assembly.ts";
 export {
+  createTopDownWallBandPath,
+  createTopDownWallBandShape,
+  type TopDownWallBandPath,
+} from "./top-down-wall-band.ts";
+export {
   getWallColorPalette,
   type WallColorPalette,
   type WallColorPaletteVariant,

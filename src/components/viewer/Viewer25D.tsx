@@ -14,6 +14,8 @@ import {
   configureContactShadowSoftness,
   createContactShadowFootprint,
   createExteriorWallMeshAssembly,
+  createTopDownWallBandPath,
+  createTopDownWallBandShape,
   createWallMeshAssembly,
   getContactShadowSoftnessPreset,
   getGlassMaterialConfig,
@@ -407,6 +409,7 @@ interface RoomMeshProps {
   color:    string;
   label:    string;
   isActive: boolean;
+  cameraMode: ViewerCameraMode;
 }
 
 function RoomMesh({
@@ -420,6 +423,7 @@ function RoomMesh({
   color,
   label,
   isActive,
+  cameraMode,
 }: RoomMeshProps) {
   const surfaceLayout = useMemo(
     () =>
@@ -454,6 +458,25 @@ function RoomMesh({
       ),
     [points, wallBaseOffset, wallH],
   );
+  const topDownWallBandShape = useMemo(() => {
+    if (cameraMode !== "top-down-orthographic") {
+      return null;
+    }
+
+    const wallBand = createTopDownWallBandPath(
+      points.map((point) => ({
+        x: point.x / 100,
+        y: point.y / 100,
+      })),
+      WALL_THICKNESS,
+    );
+
+    if (wallBand == null) {
+      return null;
+    }
+
+    return createTopDownWallBandShape(wallBand);
+  }, [cameraMode, points]);
 
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
@@ -465,21 +488,36 @@ function RoomMesh({
 
   return (
     <group position={[0, floorRenderY, 0]}>
-      {/* Wall assembly — softened segments and corners, no ceiling */}
-      {wallMeshAssembly.meshes.map((wallMesh, index) => (
-        <mesh
-          key={`${wallMesh.source}-${index}`}
-          geometry={wallMesh.geometry}
-          position={wallMesh.position}
-          rotation={wallMesh.rotation}
-        >
-          <meshStandardMaterial
-            {...INTERIOR_WALL_SHADING}
-            transparent={meshTransparent}
-            opacity={meshOpacity}
-          />
-        </mesh>
-      ))}
+      {/* Edit mode renders one closed wall-band fill; preview keeps full wall meshes. */}
+      {cameraMode === "top-down-orthographic"
+        ? topDownWallBandShape != null && (
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, wallBaseOffset + wallH + 0.0005, 0]}
+            >
+              <shapeGeometry args={[topDownWallBandShape]} />
+              <meshStandardMaterial
+                {...INTERIOR_WALL_SHADING}
+                side={THREE.DoubleSide}
+                transparent={meshTransparent}
+                opacity={meshOpacity}
+              />
+            </mesh>
+          )
+        : wallMeshAssembly.meshes.map((wallMesh, index) => (
+            <mesh
+              key={`${wallMesh.source}-${index}`}
+              geometry={wallMesh.geometry}
+              position={wallMesh.position}
+              rotation={wallMesh.rotation}
+            >
+              <meshStandardMaterial
+                {...INTERIOR_WALL_SHADING}
+                transparent={meshTransparent}
+                opacity={meshOpacity}
+              />
+            </mesh>
+          ))}
 
       {/* Floor plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, floorBaseOffset, 0]}>
@@ -981,6 +1019,7 @@ export default function Viewer25D({
                 color={FLOOR_COLORS[roomNode.colorIndex % FLOOR_COLORS.length]}
                 label={roomNode.roomName}
                 isActive={roomNode.isActive}
+                cameraMode={cameraMode}
               />
             ))}
             {createViewer25DTopDownHandleOverlayScene({

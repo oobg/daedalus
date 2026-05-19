@@ -29,6 +29,83 @@ import {
   resolveWallCornerRadius,
 } from "../src/components/viewer/viewer25dGeometry.ts";
 
+function computeSignedArea(points: readonly { x: number; y: number }[]): number {
+  let area = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+
+  return area / 2;
+}
+
+function isPointOnSegment(
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): boolean {
+  const cross =
+    (point.y - start.y) * (end.x - start.x) -
+    (point.x - start.x) * (end.y - start.y);
+
+  if (Math.abs(cross) > 1e-6) {
+    return false;
+  }
+
+  const dot =
+    (point.x - start.x) * (end.x - start.x) +
+    (point.y - start.y) * (end.y - start.y);
+
+  if (dot < -1e-6) {
+    return false;
+  }
+
+  const squaredLength =
+    (end.x - start.x) * (end.x - start.x) +
+    (end.y - start.y) * (end.y - start.y);
+
+  return dot <= squaredLength + 1e-6;
+}
+
+function isPointInsideOrOnPolygon(
+  point: { x: number; y: number },
+  polygon: readonly { x: number; y: number }[],
+): boolean {
+  let isInside = false;
+
+  for (
+    let index = 0, previousIndex = polygon.length - 1;
+    index < polygon.length;
+    previousIndex = index, index += 1
+  ) {
+    const start = polygon[previousIndex];
+    const end = polygon[index];
+
+    if (isPointOnSegment(point, start, end)) {
+      return true;
+    }
+
+    const crossesScanline =
+      (start.y > point.y) !== (end.y > point.y);
+
+    if (!crossesScanline) {
+      continue;
+    }
+
+    const intersectionX =
+      ((end.x - start.x) * (point.y - start.y)) / (end.y - start.y) +
+      start.x;
+
+    if (intersectionX >= point.x - 1e-6) {
+      isInside = !isInside;
+    }
+  }
+
+  return isInside;
+}
+
 test("resolveWallBaseElevationOffset raises walls above the floor plane by a thin default separation", () => {
   const offset = resolveWallBaseElevationOffset();
 
@@ -315,6 +392,68 @@ test("createInsetPolygon preserves inward shrinking for clockwise room polygons"
     { x: 3.8, y: 2.8 },
     { x: 3.8, y: 0.2 },
   ]);
+});
+
+test("createInsetPolygon normalizes explicitly closed room outlines before computing the inward contour", () => {
+  const insetPolygon = createInsetPolygon(
+    [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 3 },
+      { x: 0, y: 3 },
+      { x: 0, y: 0 },
+    ],
+    0.2,
+  );
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.2, y: 0.2 },
+    { x: 3.8, y: 0.2 },
+    { x: 3.8, y: 2.8 },
+    { x: 0.2, y: 2.8 },
+  ]);
+});
+
+test("createInsetPolygon keeps narrow concave quadrilateral insets strictly inside the source outline", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 2, y: 0.2 },
+    { x: 0, y: 3 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.2);
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.2, y: 0.2 },
+    { x: 1.889927, y: 0.01001 },
+    { x: 0.2, y: 2.375907 },
+  ]);
+  assert.equal(computeSignedArea(insetPolygon) > 0, true);
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+});
+
+test("createInsetPolygon preserves winding order while clipping clockwise narrow concave quadrilateral insets inward", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 0, y: 3 },
+    { x: 2, y: 0.2 },
+    { x: 4, y: 0 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.2);
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.2, y: 0.2 },
+    { x: 0.2, y: 2.375907 },
+    { x: 1.889927, y: 0.01001 },
+  ]);
+  assert.equal(computeSignedArea(insetPolygon) < 0, true);
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
 });
 
 test("createWallContourOffsets derives paired inner and outer contours for each wall segment with floor-gap clearance", () => {

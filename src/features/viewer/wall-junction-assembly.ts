@@ -1,5 +1,7 @@
 import {
+  createInsetPolygon,
   createSoftenedWallCornerPaths,
+  inspectWallTopology,
   type Viewer25DGeometryConfig,
   type Viewer25DPoint2D,
 } from "../../components/viewer/viewer25dGeometry.ts";
@@ -43,6 +45,19 @@ export interface WallJunctionAssembly {
   sections: WallJunctionSection[];
   straightSectionCount: number;
   cornerSectionCount: number;
+  wallBand: WallBandRing | null;
+}
+
+export interface WallBandRing {
+  outerOutline: Viewer25DPoint2D[];
+  innerContour: Viewer25DPoint2D[];
+  stitchedLoop: Viewer25DPoint2D[];
+}
+
+export interface WallBandTopologyValidationResult {
+  isRejected: boolean;
+  isContinuous: boolean;
+  isSelfIntersecting: boolean;
 }
 
 export function createWallJunctionAssembly(
@@ -55,6 +70,7 @@ export function createWallJunctionAssembly(
       sections: [],
       straightSectionCount: 0,
       cornerSectionCount: 0,
+      wallBand: null,
     };
   }
 
@@ -65,10 +81,13 @@ export function createWallJunctionAssembly(
       sections: straightSection == null ? [] : [straightSection],
       straightSectionCount: straightSection == null ? 0 : 1,
       cornerSectionCount: 0,
+      wallBand: null,
     };
   }
 
-  const cornerPaths = createSoftenedWallCornerPaths(points, options);
+  const outerOutline = normalizeClosedOutline(points);
+  const innerContour = createInsetPolygon(outerOutline, options.thickness);
+  const cornerPaths = createSoftenedWallCornerPaths(outerOutline, options);
   const sections: WallJunctionSection[] = [];
   let cornerSectionCount = 0;
   let straightSectionCount = 0;
@@ -110,6 +129,40 @@ export function createWallJunctionAssembly(
     sections,
     straightSectionCount,
     cornerSectionCount,
+    wallBand: createWallBandRing(outerOutline, innerContour),
+  };
+}
+
+function createWallBandRing(
+  outerOutline: readonly Viewer25DPoint2D[],
+  innerContour: readonly Viewer25DPoint2D[],
+): WallBandRing | null {
+  if (outerOutline.length < 3 || innerContour.length < 3) {
+    return null;
+  }
+
+  const wallBand = {
+    outerOutline: [...outerOutline],
+    innerContour: [...innerContour],
+    stitchedLoop: [...outerOutline, ...[...innerContour].reverse()],
+  };
+
+  if (validateWallBandTopology(wallBand).isRejected) {
+    return null;
+  }
+
+  return wallBand;
+}
+
+export function validateWallBandTopology(
+  wallBand: Pick<WallBandRing, "stitchedLoop">,
+): WallBandTopologyValidationResult {
+  const topology = inspectWallTopology(wallBand.stitchedLoop);
+
+  return {
+    isRejected: !topology.isContinuous || topology.isSelfIntersecting,
+    isContinuous: topology.isContinuous,
+    isSelfIntersecting: topology.isSelfIntersecting,
   };
 }
 
@@ -186,4 +239,36 @@ function readTerminalPoint(
   fallback: Viewer25DPoint2D,
 ): Viewer25DPoint2D {
   return path[path.length - 1] ?? fallback;
+}
+
+function normalizeClosedOutline(
+  points: readonly Viewer25DPoint2D[],
+): Viewer25DPoint2D[] {
+  const outline: Viewer25DPoint2D[] = [];
+
+  for (const point of points) {
+    if (!arePointsEquivalent(outline.at(-1), point)) {
+      outline.push(point);
+    }
+  }
+
+  if (outline.length >= 2 && arePointsEquivalent(outline[0], outline.at(-1)!)) {
+    outline.pop();
+  }
+
+  return outline;
+}
+
+function arePointsEquivalent(
+  left: Viewer25DPoint2D | undefined,
+  right: Viewer25DPoint2D,
+): boolean {
+  if (left == null) {
+    return false;
+  }
+
+  return (
+    Math.abs(left.x - right.x) <= MIN_SEGMENT_LENGTH &&
+    Math.abs(left.y - right.y) <= MIN_SEGMENT_LENGTH
+  );
 }
