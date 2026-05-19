@@ -36,6 +36,19 @@ import {
   resolveViewer25DStackExtrusionDepth,
   type Viewer25DFloorRenderPlacement,
 } from "./viewer25dGeometry";
+import {
+  applyViewerCameraModeConfig,
+  resolveViewerCameraModeConfig,
+  resolveViewerViewportState,
+  type ViewerCameraMode,
+} from "@/features/viewer/viewer-camera-mode";
+import { resolveTopDownSceneBounds } from "@/features/viewer/top-down-camera-configuration";
+import {
+  createViewer25DSceneGraph,
+  resolveViewer25DRenderPlan,
+} from "./viewer25dSceneGraph";
+import { createViewer25DTopDownHandleOverlayScene } from "./viewer25dTopDownHandleOverlayScene";
+import { resolveViewer25DSharedSceneInstance } from "./viewer25dSharedScene";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
 const FLOOR_COLORS      = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
@@ -80,57 +93,6 @@ function computeSceneCenter(floors: EditorFloor[]): { x: number; z: number } {
       }
   if (!isFinite(minX)) return { x: 0, z: 0 };
   return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
-}
-
-function computeSceneBounds(
-  floors: EditorFloor[],
-  exteriorPolygon?: EditorPoint[] | null,
-): { minX: number; maxX: number; minZ: number; maxZ: number; width: number; depth: number } {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minZ = Infinity;
-  let maxZ = -Infinity;
-
-  const trackPoint = (point: EditorPoint) => {
-    const worldX = point.x / 100;
-    const worldZ = point.y / 100;
-    minX = Math.min(minX, worldX);
-    maxX = Math.max(maxX, worldX);
-    minZ = Math.min(minZ, worldZ);
-    maxZ = Math.max(maxZ, worldZ);
-  };
-
-  for (const floor of floors) {
-    for (const room of floor.rooms) {
-      for (const point of room.roomPolygon) {
-        trackPoint(point);
-      }
-    }
-  }
-
-  for (const point of exteriorPolygon ?? []) {
-    trackPoint(point);
-  }
-
-  if (!isFinite(minX) || !isFinite(minZ)) {
-    return {
-      minX: -1,
-      maxX: 1,
-      minZ: -1,
-      maxZ: 1,
-      width: 2,
-      depth: 2,
-    };
-  }
-
-  return {
-    minX,
-    maxX,
-    minZ,
-    maxZ,
-    width: Math.max(maxX - minX, 2),
-    depth: Math.max(maxZ - minZ, 2),
-  };
 }
 
 function createShadowFootprints(
@@ -434,8 +396,8 @@ function OpeningMarker({
 
 // ── RoomMesh — walls as per-edge boxes, no ceiling ───────────────────────────
 interface RoomMeshProps {
-  points:   EditorPoint[];
-  openings: RoomOpening[];
+  points:   readonly EditorPoint[];
+  openings: readonly RoomOpening[];
   floorRenderY: number;
   height:   number;
   floorBaseOffset: number;
@@ -679,9 +641,23 @@ function AmbientOcclusionComposer() {
   return null;
 }
 
+function SceneCameraController({
+  cameraModeConfig,
+}: {
+  cameraModeConfig: ReturnType<typeof resolveViewerCameraModeConfig>;
+}) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    applyViewerCameraModeConfig(camera, cameraModeConfig);
+  }, [camera, cameraModeConfig]);
+
+  return null;
+}
+
 // ── Exterior wall — wraps all floors ─────────────────────────────────────────
 interface ExteriorWallProps {
-  points: EditorPoint[];
+  points: readonly EditorPoint[];
   totalHeight: number;
 }
 
@@ -723,6 +699,7 @@ interface Props {
   activeFloorId: string | null;
   exteriorPolygon?: EditorPoint[] | null;
   exteriorEdgeOpenings?: RoomOpening[];
+  cameraMode?: ViewerCameraMode;
   floorBaseOffset?: number;
   wallBaseOffset?: number;
   floorPerimeterInset?: number;
@@ -733,15 +710,19 @@ export default function Viewer25D({
   activeFloorId,
   exteriorPolygon,
   exteriorEdgeOpenings,
+  cameraMode = "perspective",
   floorBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.floorBaseOffset,
   wallBaseOffset = DEFAULT_ROOM_LAYER_ELEVATIONS.wallBaseOffset,
   floorPerimeterInset = resolveFloorPerimeterInset({
     wallThickness: WALL_THICKNESS,
   }),
 }: Props) {
+  const sharedSceneInstanceRef = useRef<THREE.Scene>(
+    resolveViewer25DSharedSceneInstance(),
+  );
   const sceneCenter = useMemo(() => computeSceneCenter(floors), [floors]);
   const sceneBounds = useMemo(
-    () => computeSceneBounds(floors, exteriorPolygon),
+    () => resolveTopDownSceneBounds({ floors, exteriorPolygon }),
     [exteriorPolygon, floors],
   );
   const floorPlacements = useMemo(
@@ -759,28 +740,62 @@ export default function Viewer25D({
       ),
     [exteriorPolygon, floorBaseOffset, floorPlacements, floors, wallBaseOffset],
   );
-  const floorData = floors.map((floor, i) => ({
-    floor,
-    y: floorPlacements[i]?.renderVerticalOffset ?? 0,
-    colorIndex: i,
-  }));
-  const totalHeight = floors.reduce((s, f) => s + f.floorHeight, 0);
   const wallTopHeight = resolveViewer25DStackExtrusionDepth(floors, WALL_HEIGHT_SCALE);
   const orbitTargetY = Math.max(wallTopHeight * 0.32, 0.2);
   const pedestalWidth = sceneBounds.width + VIEWER_PRESENTATION.pedestalMargin * 2;
   const pedestalDepth = sceneBounds.depth + VIEWER_PRESENTATION.pedestalMargin * 2;
   const pedestalY = -VIEWER_PRESENTATION.pedestalHeight / 2 - 0.035;
+  const sharedSceneGraph = useMemo(
+    () =>
+      createViewer25DSceneGraph({
+        floors,
+        activeFloorId,
+        exteriorPolygon,
+        exteriorEdgeOpenings,
+        floorRenderOffsets: floorPlacements.map(
+          (placement) => placement.renderVerticalOffset ?? 0,
+        ),
+      }),
+    [activeFloorId, exteriorEdgeOpenings, exteriorPolygon, floorPlacements, floors],
+  );
+  const renderPlan = useMemo(
+    () =>
+      resolveViewer25DRenderPlan({
+        sceneGraph: sharedSceneGraph,
+        cameraMode,
+      }),
+    [cameraMode, sharedSceneGraph],
+  );
+  const viewportState = useMemo(
+    () =>
+      resolveViewerViewportState({
+        sceneGraph: sharedSceneGraph,
+        cameraMode,
+        sceneBounds,
+        perspectivePosition: VIEWER_PRESENTATION.cameraPosition,
+        perspectiveFov: VIEWER_PRESENTATION.cameraFov,
+        fixedPolarAngle: FIXED_POLAR,
+      }),
+    [cameraMode, sceneBounds, sharedSceneGraph],
+  );
+  const cameraModeConfig = viewportState.camera;
 
   return (
     <div className="w-full h-full bg-[#F7F6F2]">
       <Canvas
+        scene={sharedSceneInstanceRef.current}
+        orthographic={cameraModeConfig.orthographic}
         camera={{
-          position: [...VIEWER_PRESENTATION.cameraPosition],
-          fov: VIEWER_PRESENTATION.cameraFov,
+          position: [...cameraModeConfig.position],
+          near: cameraModeConfig.near,
+          far: cameraModeConfig.far,
+          ...(cameraModeConfig.fov != null ? { fov: cameraModeConfig.fov } : {}),
+          ...(cameraModeConfig.zoom != null ? { zoom: cameraModeConfig.zoom } : {}),
         }}
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
+        <SceneCameraController cameraModeConfig={cameraModeConfig} />
         <color attach="background" args={[VIEWER_PRESENTATION.backgroundColor]} />
         <fog
           attach="fog"
@@ -836,43 +851,57 @@ export default function Viewer25D({
                 metalness={0.02}
               />
             </RoundedBox>
-            {exteriorPolygon && exteriorPolygon.length >= 3 && (
-              <ExteriorWall points={exteriorPolygon} totalHeight={totalHeight} />
+            {renderPlan.exteriorNode != null && (
+              <ExteriorWall
+                points={renderPlan.exteriorNode.points}
+                totalHeight={renderPlan.exteriorNode.totalHeight}
+              />
             )}
-            {totalHeight > 0 && (exteriorEdgeOpenings ?? []).map(op => (
-              <OpeningMarker
-                key={op.id}
-                opening={op}
-                wallH={resolveViewer25DFloorExtrusionDepth(totalHeight, WALL_HEIGHT_SCALE)}
-                isActive={true}
+            {renderPlan.exteriorNode != null &&
+              renderPlan.exteriorOpeningNodes.map((op) => (
+                <OpeningMarker
+                  key={op.id}
+                  opening={op}
+                  wallH={resolveViewer25DFloorExtrusionDepth(
+                    renderPlan.exteriorNode!.totalHeight,
+                    WALL_HEIGHT_SCALE,
+                  )}
+                  isActive={true}
+                />
+              ))}
+            {renderPlan.roomNodes.map((roomNode) => (
+              <RoomMesh
+                key={roomNode.nodeId}
+                points={roomNode.points}
+                openings={roomNode.openings}
+                floorRenderY={roomNode.floorRenderY}
+                height={roomNode.floorHeight}
+                floorBaseOffset={floorBaseOffset}
+                wallBaseOffset={wallBaseOffset}
+                floorPerimeterInset={floorPerimeterInset}
+                color={FLOOR_COLORS[roomNode.colorIndex % FLOOR_COLORS.length]}
+                label={roomNode.roomName}
+                isActive={roomNode.isActive}
               />
             ))}
-            {floorData.map(({ floor, y, colorIndex }) => {
-              const isActive = activeFloorId === null || floor.floorId === activeFloorId;
-              return floor.rooms.map(room => (
-                <RoomMesh
-                  key={room.roomId}
-                  points={room.roomPolygon}
-                  openings={room.openings ?? []}
-                  floorRenderY={y}
-                  height={floor.floorHeight}
-                  floorBaseOffset={floorBaseOffset}
-                  wallBaseOffset={wallBaseOffset}
-                  floorPerimeterInset={floorPerimeterInset}
-                  color={FLOOR_COLORS[colorIndex % FLOOR_COLORS.length]}
-                  label={room.roomName}
-                  isActive={isActive}
-                />
-              ));
+            {createViewer25DTopDownHandleOverlayScene({
+              geometrySource: renderPlan,
+              cameraMode,
             })}
           </group>
         </Suspense>
 
         <OrbitControls
-          enablePan enableZoom enableRotate enableDamping
+          enablePan enableZoom enableDamping
+          enableRotate={cameraModeConfig.enableRotate}
           dampingFactor={0.08} rotateSpeed={0.5} zoomSpeed={0.6}
-          minPolarAngle={FIXED_POLAR} maxPolarAngle={FIXED_POLAR}
-          target={[0, orbitTargetY, 0]}
+          minPolarAngle={cameraModeConfig.minPolarAngle}
+          maxPolarAngle={cameraModeConfig.maxPolarAngle}
+          target={
+            cameraModeConfig.orthographic
+              ? [...cameraModeConfig.lookAt]
+              : [0, orbitTargetY, 0]
+          }
         />
         <ScreenshotButton />
       </Canvas>

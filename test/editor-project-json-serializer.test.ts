@@ -259,6 +259,7 @@ test("serializeEditorProjectToJsonDocument emits the required building guide fie
       activeFloorId: "floor-upper",
       selectedRoomId: "room-gallery",
     },
+    exteriorEdgeOpenings: [],
   });
 });
 

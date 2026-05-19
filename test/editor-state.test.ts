@@ -158,6 +158,7 @@ test("createEditorState builds a mutable cloned editor tree for project, floors,
         selectedRoomId: null,
       },
       exteriorPolygon: null,
+      exteriorEdgeOpenings: [],
     },
   });
 
@@ -183,6 +184,7 @@ test("createEditorState supplies safe defaults when optional project fields are 
         selectedRoomId: null,
       },
       exteriorPolygon: null,
+      exteriorEdgeOpenings: [],
     },
   });
 });

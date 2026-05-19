@@ -3,11 +3,18 @@ import test from "node:test";
 
 import {
   adaptProjectSnapshotToRenderScene,
+  createReadonlyEditorStateProjection,
   type RendererPort,
   type RenderSceneData,
   type RendererSnapshotProject,
 } from "../src/features/renderer/index.ts";
 import { createViewerComposition } from "../src/features/viewer/index.ts";
+import { createEditorProject } from "../src/domain/editor-state.ts";
+import {
+  createViewer25DSceneGraph,
+  resolveViewer25DRenderPlan,
+  resolveViewer25DSceneGeometrySource,
+} from "../src/components/viewer/viewer25dSceneGraph.ts";
 
 test("viewer composition renders a supplied render scene without editor state dependencies", () => {
   const calls: Readonly<RenderSceneData>[] = [];
@@ -106,6 +113,224 @@ test("viewer composition preserves distinct ordered floor, furniture, and wall l
   );
   assert.equal(layers.floor.baseElevation < layers.furniture.baseElevation, true);
   assert.equal(layers.furniture.baseElevation < layers.wall.baseElevation, true);
+});
+
+test("top-down viewer render planning reuses shared 2.5D scene nodes instead of a duplicate 2D source", () => {
+  const project = createEditorProject({
+    projectId: "project-shared-top-down",
+    projectName: "Shared Top Down",
+    objectVersion: 5,
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "Ground",
+        floorHeight: 3.5,
+        rooms: [
+          {
+            roomId: "room-lobby",
+            roomName: "Lobby",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 6 },
+              { x: 0, y: 6 },
+            ],
+            openings: [
+              {
+                id: "opening-lobby-door",
+                type: "door",
+                x: 4,
+                y: 0,
+                angle: 0,
+              },
+            ],
+          },
+        ],
+        guideObjects: [
+          {
+            guideObjectId: "guide-lobby-desk",
+            guideObjectType: "furniture",
+            floorId: "floor-1",
+            roomId: "room-lobby",
+            name: "Desk",
+            position: { x: 2, y: 2 },
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-core-1",
+            connectorType: "stair",
+            roomId: "room-lobby",
+            targetFloorId: "floor-2",
+            position: { x: 6, y: 4 },
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      selectedRoomId: "room-lobby",
+    },
+    exteriorPolygon: [
+      { x: -1, y: -1 },
+      { x: 9, y: -1 },
+      { x: 9, y: 7 },
+      { x: -1, y: 7 },
+    ],
+    exteriorEdgeOpenings: [
+      {
+        id: "opening-exterior-door",
+        type: "door",
+        x: 0,
+        y: 3,
+        angle: 0,
+      },
+    ],
+  });
+  const projection = createReadonlyEditorStateProjection(project);
+  const viewerScene = createViewerComposition({
+    render(scene) {
+      return scene;
+    },
+  }).createLoadedSceneViewer(adaptProjectSnapshotToRenderScene(projection.project));
+  const sharedSceneGraph = createViewer25DSceneGraph({
+    floors: project.floors,
+    activeFloorId: project.viewState.activeFloorId,
+    exteriorPolygon: project.exteriorPolygon,
+    exteriorEdgeOpenings: project.exteriorEdgeOpenings,
+    floorRenderOffsets: viewerScene
+      .getScene()
+      .floors.map((floor) => floor.renderVerticalOffset ?? 0),
+  });
+
+  const perspectivePlan = resolveViewer25DRenderPlan({
+    sceneGraph: sharedSceneGraph,
+    cameraMode: "perspective",
+  });
+  const topDownPlan = resolveViewer25DRenderPlan({
+    sceneGraph: sharedSceneGraph,
+    cameraMode: "top-down-orthographic",
+  });
+
+  assert.equal(perspectivePlan.sceneGraph, topDownPlan.sceneGraph);
+  assert.equal(perspectivePlan.roomNodes, topDownPlan.roomNodes);
+  assert.equal(topDownPlan.roomNodes[0].points, project.floors[0].rooms[0].roomPolygon);
+  assert.equal(topDownPlan.roomNodes[0].openings, project.floors[0].rooms[0].openings);
+  assert.equal(topDownPlan.exteriorNode?.points, project.exteriorPolygon);
+  assert.equal(topDownPlan.exteriorOpeningNodes, project.exteriorEdgeOpenings);
+  assert.equal(
+    topDownPlan.guideObjectNodes[0]?.position,
+    project.floors[0].guideObjects?.[0]?.position,
+  );
+  assert.equal(
+    topDownPlan.verticalConnectorNodes[0]?.position,
+    project.floors[0].verticalConnectors?.[0]?.position,
+  );
+  assert.equal("canvas2DNodes" in topDownPlan, false);
+});
+
+test("top-down scene geometry selection resolves to the standard shared 2.5D scene source", () => {
+  const project = createEditorProject({
+    projectId: "project-geometry-source",
+    floors: [
+      {
+        floorId: "floor-1",
+        floorName: "Ground",
+        floorHeight: 3.5,
+        rooms: [
+          {
+            roomId: "room-1",
+            roomName: "Lobby",
+            roomPolygon: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 6 },
+              { x: 0, y: 6 },
+            ],
+            openings: [
+              {
+                id: "opening-1",
+                type: "door",
+                x: 4,
+                y: 0,
+                angle: 0,
+              },
+            ],
+          },
+        ],
+        guideObjects: [
+          {
+            guideObjectId: "guide-1",
+            guideObjectType: "furniture",
+            floorId: "floor-1",
+            roomId: "room-1",
+            name: "Desk",
+            position: { x: 2, y: 2 },
+          },
+        ],
+        verticalConnectors: [
+          {
+            connectorId: "connector-1",
+            connectorType: "stair",
+            roomId: "room-1",
+            targetFloorId: "floor-2",
+            position: { x: 6, y: 4 },
+          },
+        ],
+      },
+    ],
+    viewState: {
+      activeFloorId: "floor-1",
+      selectedRoomId: "room-1",
+    },
+    exteriorPolygon: [
+      { x: -1, y: -1 },
+      { x: 9, y: -1 },
+      { x: 9, y: 7 },
+      { x: -1, y: 7 },
+    ],
+    exteriorEdgeOpenings: [
+      {
+        id: "opening-exterior-1",
+        type: "window",
+        x: 9,
+        y: 3,
+        angle: Math.PI / 2,
+      },
+    ],
+  });
+  const sharedSceneGraph = createViewer25DSceneGraph({
+    floors: project.floors,
+    activeFloorId: project.viewState.activeFloorId,
+    exteriorPolygon: project.exteriorPolygon,
+    exteriorEdgeOpenings: project.exteriorEdgeOpenings,
+    floorRenderOffsets: [0],
+  });
+
+  const standardSceneSource = resolveViewer25DSceneGeometrySource({
+    sceneGraph: sharedSceneGraph,
+    cameraMode: "perspective",
+  });
+  const topDownSceneSource = resolveViewer25DSceneGeometrySource({
+    sceneGraph: sharedSceneGraph,
+    cameraMode: "top-down-orthographic",
+  });
+
+  assert.equal(topDownSceneSource.sceneGraph, standardSceneSource.sceneGraph);
+  assert.equal(topDownSceneSource.roomNodes, standardSceneSource.roomNodes);
+  assert.equal(topDownSceneSource.exteriorNode, standardSceneSource.exteriorNode);
+  assert.equal(
+    topDownSceneSource.exteriorOpeningNodes,
+    standardSceneSource.exteriorOpeningNodes,
+  );
+  assert.equal(
+    topDownSceneSource.guideObjectNodes,
+    standardSceneSource.guideObjectNodes,
+  );
+  assert.equal(
+    topDownSceneSource.verticalConnectorNodes,
+    standardSceneSource.verticalConnectorNodes,
+  );
 });
 
 function createRenderScene(): RenderSceneData {
