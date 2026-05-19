@@ -2,13 +2,14 @@
 
 import { Suspense, useMemo, useCallback, useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Html, OrbitControls, RoundedBox } from "@react-three/drei";
+import { ContactShadows, Html, Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import type { EditorFloor, EditorPoint, RoomOpening } from "@/domain/editor-state";
+import type { EditorFloor, EditorPoint, RoomOpening, RoomOpeningType } from "@/domain/editor-state";
+import { useEditorStore } from "@/store/editorStore";
 import {
   configureContactShadowSoftness,
   createContactShadowFootprint,
@@ -528,6 +529,103 @@ function RoomMesh({
   );
 }
 
+// ── Drawing Layer — top-down polygon + opening placement ─────────────────────
+function DrawingLayer({ sceneCenter }: { sceneCenter: { x: number; z: number } }) {
+  const activeTool         = useEditorStore(s => s.activeTool);
+  const isDrawing          = useEditorStore(s => s.isDrawing);
+  const draftPoints        = useEditorStore(s => s.draftPoints);
+  const addDraftPoint      = useEditorStore(s => s.addDraftPoint);
+  const commitDraft        = useEditorStore(s => s.commitDraft);
+  const cancelDraft        = useEditorStore(s => s.cancelDraft);
+  const activeFloorId      = useEditorStore(s => s.project.viewState.activeFloorId);
+  const selectedRoomId     = useEditorStore(s => s.project.viewState.selectedRoomId);
+  const addOpening         = useEditorStore(s => s.addOpening);
+  const addExteriorOpening = useEditorStore(s => s.addExteriorOpening);
+
+  const isPolygonTool = activeTool === "room" || activeTool === "exterior";
+  const isOpeningTool = activeTool === "door" || activeTool === "window" || activeTool === "stair" || activeTool === "elevator";
+  const isCapturing   = isPolygonTool || isOpeningTool;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelDraft();
+      if (e.key === "Enter" && isDrawing && draftPoints.length >= 3) commitDraft();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cancelDraft, commitDraft, isDrawing, draftPoints.length]);
+
+  const handleClick = useCallback(
+    (e: { point: THREE.Vector3; stopPropagation: () => void }) => {
+      if (!isCapturing) return;
+      e.stopPropagation();
+      const cx = (e.point.x + sceneCenter.x) * 100;
+      const cy = (e.point.z + sceneCenter.z) * 100;
+      if (isPolygonTool) {
+        addDraftPoint({ x: cx, y: cy });
+      } else if (isOpeningTool) {
+        const type = activeTool as RoomOpeningType;
+        if (activeFloorId && selectedRoomId) {
+          addOpening(activeFloorId, selectedRoomId, type, cx, cy);
+        } else if (activeFloorId) {
+          addExteriorOpening(type, cx, cy);
+        }
+      }
+    },
+    [isCapturing, isPolygonTool, isOpeningTool, activeTool, addDraftPoint, addOpening, addExteriorOpening, activeFloorId, selectedRoomId, sceneCenter],
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      if (!isPolygonTool || draftPoints.length < 3) return;
+      e.stopPropagation();
+      commitDraft();
+    },
+    [isPolygonTool, draftPoints.length, commitDraft],
+  );
+
+  const draftLinePoints = useMemo<[number, number, number][]>(() => {
+    if (draftPoints.length < 2) return [];
+    const pts = draftPoints.map((p): [number, number, number] => [p.x / 100, 0.01, p.y / 100]);
+    if (draftPoints.length >= 3) pts.push(pts[0]);
+    return pts;
+  }, [draftPoints]);
+
+  if (!isCapturing) return null;
+
+  return (
+    <>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.001, 0]}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+      >
+        <planeGeometry args={[2000, 2000]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      {isDrawing && draftLinePoints.length >= 2 && (
+        <Line points={draftLinePoints} color="#2563EB" lineWidth={2} />
+      )}
+      {isDrawing && draftPoints.map((p, i) => (
+        <Html key={i} position={[p.x / 100, 0.05, p.y / 100]} center>
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: "#2563EB",
+              border: "2px solid white",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              pointerEvents: "none",
+            }}
+          />
+        </Html>
+      ))}
+    </>
+  );
+}
+
 // ── Screenshot button ─────────────────────────────────────────────────────────
 function ScreenshotButton() {
   const { gl, scene, camera } = useThree();
@@ -717,6 +815,7 @@ export default function Viewer25D({
     wallThickness: WALL_THICKNESS,
   }),
 }: Props) {
+  const activeTool = useEditorStore(s => s.activeTool);
   const sharedSceneInstanceRef = useRef<THREE.Scene>(
     resolveViewer25DSharedSceneInstance(),
   );
@@ -888,12 +987,15 @@ export default function Viewer25D({
               geometrySource: renderPlan,
               cameraMode,
             })}
+            <DrawingLayer sceneCenter={sceneCenter} />
           </group>
         </Suspense>
 
         <OrbitControls
-          enablePan enableZoom enableDamping
-          enableRotate={cameraModeConfig.enableRotate}
+          enablePan={activeTool === "select"}
+          enableZoom
+          enableDamping
+          enableRotate={activeTool === "select" && cameraModeConfig.enableRotate}
           dampingFactor={0.08} rotateSpeed={0.5} zoomSpeed={0.6}
           minPolarAngle={cameraModeConfig.minPolarAngle}
           maxPolarAngle={cameraModeConfig.maxPolarAngle}
