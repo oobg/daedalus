@@ -15,6 +15,7 @@ import {
   DEFAULT_WALL_CORNER_RADIUS_MIN,
   DEFAULT_WALL_THICKNESS,
   inspectWallTopology,
+  resolveClosedPolygonOrientation,
   resolveFurnitureFootprintClearance,
   resolveFloorBaseElevationOffset,
   resolveFloorPerimeterInset,
@@ -104,6 +105,39 @@ function isPointInsideOrOnPolygon(
   }
 
   return isInside;
+}
+
+function assertOffsetEdgeLiesInsidePolygon(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  polygon: readonly { x: number; y: number }[],
+): void {
+  for (const ratio of [0, 0.25, 0.5, 0.75, 1]) {
+    assert.equal(
+      isPointInsideOrOnPolygon(
+        {
+          x: start.x + (end.x - start.x) * ratio,
+          y: start.y + (end.y - start.y) * ratio,
+        },
+        polygon,
+      ),
+      true,
+      `Expected sampled offset edge point at ${ratio} to remain inside the source polygon.`,
+    );
+  }
+}
+
+function assertPolygonSegmentsLieInsidePolygon(
+  polygon: readonly { x: number; y: number }[],
+  sourcePolygon: readonly { x: number; y: number }[],
+): void {
+  for (let index = 0; index < polygon.length; index += 1) {
+    assertOffsetEdgeLiesInsidePolygon(
+      polygon[index],
+      polygon[(index + 1) % polygon.length],
+      sourcePolygon,
+    );
+  }
 }
 
 test("resolveWallBaseElevationOffset raises walls above the floor plane by a thin default separation", () => {
@@ -394,6 +428,80 @@ test("createInsetPolygon preserves inward shrinking for clockwise room polygons"
   ]);
 });
 
+test("createInsetPolygon keeps a convex quadrilateral inset strictly inward while preserving vertex order", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 5, y: 1 },
+    { x: 4, y: 4 },
+    { x: -1, y: 3 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.3);
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.200857, y: 0.346113 },
+    { x: 4.60793, y: 1.227527 },
+    { x: 3.799143, y: 3.653887 },
+    { x: -0.60793, y: 2.772473 },
+  ]);
+  assert.equal(insetPolygon.length, sourcePolygon.length);
+  assert.equal(computeSignedArea(insetPolygon) > 0, true);
+  assert.equal(
+    Math.abs(computeSignedArea(insetPolygon)) <
+      Math.abs(computeSignedArea(sourcePolygon)),
+    true,
+  );
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+});
+
+test("createInsetPolygon preserves one-to-one vertex pairing for explicitly closed convex quadrilateral outlines", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 5, y: 1 },
+    { x: 4, y: 4 },
+    { x: -1, y: 3 },
+    { x: 0, y: 0 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.3);
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.200857, y: 0.346113 },
+    { x: 4.60793, y: 1.227527 },
+    { x: 3.799143, y: 3.653887 },
+    { x: -0.60793, y: 2.772473 },
+  ]);
+  assert.equal(insetPolygon.length, sourcePolygon.length - 1);
+  assert.equal(computeSignedArea(insetPolygon) > 0, true);
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+});
+
+test("createInsetPolygon returns a simple inward-only inner contour for convex quadrilateral walls", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 5, y: 1 },
+    { x: 4, y: 4 },
+    { x: -1, y: 3 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.3);
+  const topology = inspectWallTopology(insetPolygon);
+
+  assert.equal(insetPolygon.length, sourcePolygon.length);
+  assert.equal(topology.isContinuous, true);
+  assert.equal(topology.isSelfIntersecting, false);
+  assert.equal(
+    Math.abs(computeSignedArea(insetPolygon)) <
+      Math.abs(computeSignedArea(sourcePolygon)),
+    true,
+  );
+
+  assertPolygonSegmentsLieInsidePolygon(insetPolygon, sourcePolygon);
+});
+
 test("createInsetPolygon normalizes explicitly closed room outlines before computing the inward contour", () => {
   const insetPolygon = createInsetPolygon(
     [
@@ -435,6 +543,63 @@ test("createInsetPolygon keeps narrow concave quadrilateral insets strictly insi
   }
 });
 
+test("createInsetPolygon keeps the larger continuous inward contour when a narrow concave chimney closes during offset joins", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 6, y: 0 },
+    { x: 6, y: 1 },
+    { x: 3.2, y: 1 },
+    { x: 3.2, y: 4 },
+    { x: 2.8, y: 4 },
+    { x: 2.8, y: 1 },
+    { x: 0, y: 1 },
+  ];
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.45);
+  const topology = inspectWallTopology(insetPolygon);
+
+  assert.deepEqual(insetPolygon, [
+    { x: 0.45, y: 0.45 },
+    { x: 5.55, y: 0.45 },
+    { x: 5.55, y: 0.55 },
+    { x: 0.45, y: 0.55 },
+  ]);
+  assert.equal(topology.isContinuous, true);
+  assert.equal(topology.isSelfIntersecting, false);
+  assert.equal(
+    Math.abs(computeSignedArea(insetPolygon) - 0.51) <= 1e-9,
+    true,
+  );
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+
+  assertPolygonSegmentsLieInsidePolygon(insetPolygon, sourcePolygon);
+});
+
+test("resolveClosedPolygonOrientation preserves counterclockwise concave polygon order and provides the inward offset side", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 2, y: 0.2 },
+    { x: 0, y: 3 },
+    { x: 0, y: 0 },
+  ];
+  const orientation = resolveClosedPolygonOrientation(sourcePolygon);
+
+  assert.ok(orientation);
+  assert.deepEqual(orientation.orderedPoints, sourcePolygon.slice(0, -1));
+  assert.equal(orientation.winding, 1);
+  assert.equal(orientation.inwardOffsetMultiplier, 1);
+  assert.equal(orientation.signedArea > 0, true);
+
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.2);
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+});
+
 test("createInsetPolygon preserves winding order while clipping clockwise narrow concave quadrilateral insets inward", () => {
   const sourcePolygon = [
     { x: 0, y: 0 },
@@ -450,6 +615,29 @@ test("createInsetPolygon preserves winding order while clipping clockwise narrow
     { x: 1.889927, y: 0.01001 },
   ]);
   assert.equal(computeSignedArea(insetPolygon) < 0, true);
+
+  for (const point of insetPolygon) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+});
+
+test("resolveClosedPolygonOrientation preserves clockwise concave polygon order and flips the inward offset side", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 0, y: 3 },
+    { x: 2, y: 0.2 },
+    { x: 4, y: 0 },
+    { x: 0, y: 0 },
+  ];
+  const orientation = resolveClosedPolygonOrientation(sourcePolygon);
+
+  assert.ok(orientation);
+  assert.deepEqual(orientation.orderedPoints, sourcePolygon.slice(0, -1));
+  assert.equal(orientation.winding, -1);
+  assert.equal(orientation.inwardOffsetMultiplier, -1);
+  assert.equal(orientation.signedArea < 0, true);
+
+  const insetPolygon = createInsetPolygon(sourcePolygon, 0.2);
 
   for (const point of insetPolygon) {
     assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
@@ -480,18 +668,18 @@ test("createWallContourOffsets derives paired inner and outer contours for each 
     { x: 0.1, y: 2.9 },
   ]);
   assert.deepEqual(contourOffsets.outerContour, [
-    { x: -0.4, y: -0.4 },
-    { x: 4.4, y: -0.4 },
-    { x: 4.4, y: 3.4 },
-    { x: -0.4, y: 3.4 },
+    { x: 0.5, y: 0.5 },
+    { x: 3.5, y: 0.5 },
+    { x: 3.5, y: 2.5 },
+    { x: 0.5, y: 2.5 },
   ]);
   assert.equal(contourOffsets.segments.length, 4);
   assert.deepEqual(contourOffsets.segments[0], {
     index: 0,
     innerStart: { x: 0.1, y: 0.1 },
     innerEnd: { x: 3.9, y: 0.1 },
-    outerStart: { x: -0.4, y: -0.4 },
-    outerEnd: { x: 4.4, y: -0.4 },
+    outerStart: { x: 0.5, y: 0.5 },
+    outerEnd: { x: 3.5, y: 0.5 },
   });
 });
 
@@ -517,17 +705,17 @@ test("createWallContourOffsets preserves per-segment ordering for clockwise poly
     { x: 3.9, y: 0.1 },
   ]);
   assert.deepEqual(contourOffsets.outerContour, [
-    { x: -0.4, y: -0.4 },
-    { x: -0.4, y: 3.4 },
-    { x: 4.4, y: 3.4 },
-    { x: 4.4, y: -0.4 },
+    { x: 0.5, y: 0.5 },
+    { x: 0.5, y: 2.5 },
+    { x: 3.5, y: 2.5 },
+    { x: 3.5, y: 0.5 },
   ]);
   assert.deepEqual(contourOffsets.segments[0], {
     index: 0,
     innerStart: { x: 0.1, y: 0.1 },
     innerEnd: { x: 0.1, y: 2.9 },
-    outerStart: { x: -0.4, y: -0.4 },
-    outerEnd: { x: -0.4, y: 3.4 },
+    outerStart: { x: 0.5, y: 0.5 },
+    outerEnd: { x: 0.5, y: 2.5 },
   });
 });
 
@@ -714,15 +902,16 @@ test("validateWallTopology collapses offset-induced crossing loops into a contin
 });
 
 test("createWallContourOffsets preserves continuous non-self-intersecting contours for concave wall plans", () => {
+  const sourcePolygon = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 4, y: 1.2 },
+    { x: 2.2, y: 1.2 },
+    { x: 2.2, y: 3.5 },
+    { x: 0, y: 3.5 },
+  ];
   const contourOffsets = createWallContourOffsets(
-    [
-      { x: 0, y: 0 },
-      { x: 4, y: 0 },
-      { x: 4, y: 1.2 },
-      { x: 2.2, y: 1.2 },
-      { x: 2.2, y: 3.5 },
-      { x: 0, y: 3.5 },
-    ],
+    sourcePolygon,
     {
       wallThickness: 0.5,
       floorPerimeterInsetRatio: 0.3,
@@ -737,7 +926,30 @@ test("createWallContourOffsets preserves continuous non-self-intersecting contou
   assert.equal(innerTopology.isSelfIntersecting, false);
   assert.equal(outerTopology.isContinuous, true);
   assert.equal(outerTopology.isSelfIntersecting, false);
-  assert.equal(contourOffsets.segments.length >= 4, true);
+  assert.equal(contourOffsets.segments.length, sourcePolygon.length);
+
+  for (const point of contourOffsets.innerContour) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+
+  for (const point of contourOffsets.outerContour) {
+    assert.equal(isPointInsideOrOnPolygon(point, sourcePolygon), true);
+  }
+
+  for (const segment of contourOffsets.segments) {
+    assert.deepEqual(segment.innerStart, contourOffsets.innerContour[segment.index]);
+    assert.deepEqual(segment.outerStart, contourOffsets.outerContour[segment.index]);
+    assertOffsetEdgeLiesInsidePolygon(
+      segment.innerStart,
+      segment.innerEnd,
+      sourcePolygon,
+    );
+    assertOffsetEdgeLiesInsidePolygon(
+      segment.outerStart,
+      segment.outerEnd,
+      sourcePolygon,
+    );
+  }
 });
 
 test("createSoftenedWallCornerPolygon replaces hard rectangular corners with rounded joins", () => {

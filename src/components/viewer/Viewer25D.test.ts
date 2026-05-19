@@ -99,6 +99,70 @@ function reverseLoop(
   return [points[0], ...points.slice(1).reverse()];
 }
 
+function isPointOnSegment(
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): boolean {
+  const cross =
+    (point.y - start.y) * (end.x - start.x) -
+    (point.x - start.x) * (end.y - start.y);
+
+  if (Math.abs(cross) > 1e-6) {
+    return false;
+  }
+
+  const dot =
+    (point.x - start.x) * (end.x - start.x) +
+    (point.y - start.y) * (end.y - start.y);
+
+  if (dot < -1e-6) {
+    return false;
+  }
+
+  const squaredLength =
+    (end.x - start.x) * (end.x - start.x) +
+    (end.y - start.y) * (end.y - start.y);
+
+  return dot <= squaredLength + 1e-6;
+}
+
+function isPointInsideOrOnPolygon(
+  point: { x: number; y: number },
+  polygon: readonly { x: number; y: number }[],
+): boolean {
+  let isInside = false;
+
+  for (
+    let index = 0, previousIndex = polygon.length - 1;
+    index < polygon.length;
+    previousIndex = index, index += 1
+  ) {
+    const start = polygon[previousIndex];
+    const end = polygon[index];
+
+    if (isPointOnSegment(point, start, end)) {
+      return true;
+    }
+
+    const crossesScanline = (start.y > point.y) !== (end.y > point.y);
+
+    if (!crossesScanline) {
+      continue;
+    }
+
+    const intersectionX =
+      ((end.x - start.x) * (point.y - start.y)) / (end.y - start.y) +
+      start.x;
+
+    if (intersectionX >= point.x - 1e-6) {
+      isInside = !isInside;
+    }
+  }
+
+  return isInside;
+}
+
 function assertLoopMatchesOutline(
   actual: readonly { x: number; y: number }[],
   expected: readonly { x: number; y: number }[],
@@ -225,6 +289,54 @@ test("top-down wall band shape uses one outer polygon with one interior hole ins
     false,
     "Expected the interior thickness cutout to remain a single inward hole.",
   );
+});
+
+test("Viewer25D edit-mode wall band triangulation stays inside a skew quadrilateral shell without any cross-band bridge", () => {
+  const wallBand = createTopDownWallBandRenderPath(
+    [
+      { x: 0.4, y: 0.2 },
+      { x: 5.1, y: 0.7 },
+      { x: 4.4, y: 3.9 },
+      { x: 0.1, y: 3.2 },
+      { x: 0.4, y: 0.2 },
+    ],
+    0.045,
+  );
+
+  assert.ok(wallBand);
+
+  const shape = createTopDownWallBandShape(wallBand);
+  assert.ok(shape);
+  const extractedPoints = shape.extractPoints(0);
+  const triangulationVertices = [
+    ...normalizeExtractedLoop(extractedPoints.shape),
+    ...extractedPoints.holes.flatMap((hole) => normalizeExtractedLoop(hole)),
+  ];
+  const triangles = ShapeUtils.triangulateShape(
+    extractedPoints.shape,
+    extractedPoints.holes,
+  );
+
+  assert.equal(triangles.length > 0, true);
+
+  for (const triangle of triangles) {
+    const vertices = triangle.map((index) => triangulationVertices[index]);
+    const centroid = {
+      x: (vertices[0].x + vertices[1].x + vertices[2].x) / 3,
+      y: (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+    };
+
+    assert.equal(
+      isPointInsideOrOnPolygon(centroid, extractedPoints.shape),
+      true,
+      "Expected every rendered wall-band triangle to remain inside the preserved outer quadrilateral outline.",
+    );
+    assert.equal(
+      isPointInsideOrOnPolygon(centroid, extractedPoints.holes[0] ?? []),
+      false,
+      "Expected no rendered wall-band triangle centroid to bridge across the inward hole into a cross-shaped artifact.",
+    );
+  }
 });
 
 test("top-down wall band path accepts a generated closed quadrilateral wall band without reordering its closed preview loop", () => {

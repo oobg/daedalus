@@ -114,6 +114,13 @@ export interface Viewer25DSoftenedCornerPath {
   isSoftened: boolean;
 }
 
+export interface Viewer25DClosedPolygonOrientation {
+  orderedPoints: Viewer25DPoint2D[];
+  signedArea: number;
+  winding: 1 | -1;
+  inwardOffsetMultiplier: 1 | -1;
+}
+
 export function resolveWallBaseElevationOffset(
   config: Viewer25DGeometryConfig = {},
 ): number {
@@ -274,7 +281,9 @@ export function createSoftenedWallCornerPaths(
   points: readonly Viewer25DPoint2D[],
   config: Viewer25DGeometryConfig = {},
 ): Viewer25DSoftenedCornerPath[] {
-  const normalizedPoints = normalizeClosedCornerPathInput(points);
+  const orientation = resolveClosedPolygonOrientation(points);
+  const normalizedPoints =
+    orientation?.orderedPoints ?? normalizeClosedPolygonVertexOrder(points);
 
   if (normalizedPoints.length < 3) {
     return normalizedPoints.map((point, index) => ({
@@ -287,9 +296,7 @@ export function createSoftenedWallCornerPaths(
     }));
   }
 
-  const signedArea = computeSignedArea(normalizedPoints);
-
-  if (Math.abs(signedArea) <= PARALLEL_LINE_EPSILON) {
+  if (orientation == null) {
     return normalizedPoints.map((point, index) => ({
       index,
       originalCorner: point,
@@ -303,7 +310,6 @@ export function createSoftenedWallCornerPaths(
   const resolvedRadius = resolveWallCornerRadius(config);
   const wallCornerSegments = config.wallCornerSegments ?? DEFAULT_WALL_CORNER_SEGMENTS;
   const wallCornerStyle = config.wallCornerStyle ?? "rounded";
-  const winding = signedArea > 0 ? 1 : -1;
   const cornerPaths: Viewer25DSoftenedCornerPath[] = [];
 
   for (let index = 0; index < normalizedPoints.length; index += 1) {
@@ -321,7 +327,7 @@ export function createSoftenedWallCornerPaths(
         radius: resolvedRadius,
         style: wallCornerStyle,
         segments: wallCornerSegments,
-        winding,
+        winding: orientation.winding,
       },
     );
 
@@ -350,7 +356,32 @@ export function createSoftenedWallCornerPaths(
   return cornerPaths;
 }
 
-function normalizeClosedCornerPathInput(
+export function resolveClosedPolygonOrientation(
+  points: readonly Viewer25DPoint2D[],
+): Viewer25DClosedPolygonOrientation | null {
+  const orderedPoints = normalizeClosedPolygonVertexOrder(points);
+
+  if (orderedPoints.length < 3) {
+    return null;
+  }
+
+  const signedArea = computeSignedArea(orderedPoints);
+
+  if (Math.abs(signedArea) <= PARALLEL_LINE_EPSILON) {
+    return null;
+  }
+
+  const winding = signedArea > 0 ? 1 : -1;
+
+  return {
+    orderedPoints,
+    signedArea,
+    winding,
+    inwardOffsetMultiplier: winding,
+  };
+}
+
+function normalizeClosedPolygonVertexOrder(
   points: readonly Viewer25DPoint2D[],
 ): Viewer25DPoint2D[] {
   const dedupedPoints: Viewer25DPoint2D[] = [];
@@ -428,6 +459,7 @@ export function createWallContourOffsets(
   points: readonly Viewer25DPoint2D[],
   config: Viewer25DGeometryConfig = {},
 ): Viewer25DWallContourOffsets {
+  const normalizedPoints = normalizePolygonTopology(points);
   const wallThickness = config.wallThickness ?? DEFAULT_WALL_THICKNESS;
   const floorGapClearance = resolveFloorPerimeterInset(config);
 
@@ -437,10 +469,13 @@ export function createWallContourOffsets(
     );
   }
 
-  const innerContour = createParallelPolygon(points, floorGapClearance);
+  const innerContour = createParallelPolygon(
+    normalizedPoints,
+    floorGapClearance,
+  );
   const outerContour = createParallelPolygon(
-    points,
-    -(wallThickness - floorGapClearance),
+    normalizedPoints,
+    wallThickness,
   );
 
   if (innerContour.length !== outerContour.length) {
@@ -666,10 +701,19 @@ function createParallelPolygon(
 
   const validatedPolygon = validateWallTopology(offsetPolygon, signedArea);
   const offsetArea = computeSignedArea(validatedPolygon);
+  const isInwardOffset = offset > 0;
+  const staysInsideSourcePolygon =
+    !isInwardOffset ||
+    validatedPolygon.every((point) => isPointInsideOrOnPolygon(point, points));
+  const shrinksSourceArea =
+    !isInwardOffset ||
+    Math.abs(offsetArea) < Math.abs(signedArea) - PARALLEL_LINE_EPSILON;
 
   if (
     Math.abs(offsetArea) <= PARALLEL_LINE_EPSILON ||
-    offsetArea * signedArea <= 0
+    offsetArea * signedArea <= 0 ||
+    !staysInsideSourcePolygon ||
+    !shrinksSourceArea
   ) {
     return [...points];
   }
@@ -681,17 +725,13 @@ function createInteriorInsetPolygon(
   points: readonly Viewer25DPoint2D[],
   inset: number,
 ): Viewer25DPoint2D[] {
-  if (points.length < 3) {
+  const orientation = resolveClosedPolygonOrientation(points);
+
+  if (orientation == null) {
     return [...points];
   }
 
-  const signedArea = computeSignedArea(points);
-
-  if (Math.abs(signedArea) <= PARALLEL_LINE_EPSILON) {
-    return [...points];
-  }
-
-  const winding = signedArea > 0 ? 1 : -1;
+  const { inwardOffsetMultiplier, signedArea } = orientation;
   const insetPolygon: Viewer25DPoint2D[] = [];
 
   for (let index = 0; index < points.length; index += 1) {
@@ -723,14 +763,18 @@ function createInteriorInsetPolygon(
     const previousOffsetPoint = {
       x:
         current.x +
-        ((-previousDirection.y / previousLength) * inset * winding),
+        ((-previousDirection.y / previousLength) * inset * inwardOffsetMultiplier),
       y:
         current.y +
-        ((previousDirection.x / previousLength) * inset * winding),
+        ((previousDirection.x / previousLength) * inset * inwardOffsetMultiplier),
     };
     const nextOffsetPoint = {
-      x: current.x + ((-nextDirection.y / nextLength) * inset * winding),
-      y: current.y + ((nextDirection.x / nextLength) * inset * winding),
+      x:
+        current.x +
+        ((-nextDirection.y / nextLength) * inset * inwardOffsetMultiplier),
+      y:
+        current.y +
+        ((nextDirection.x / nextLength) * inset * inwardOffsetMultiplier),
     };
     const intersection = intersectOffsetLines(
       previousOffsetPoint,
@@ -741,19 +785,23 @@ function createInteriorInsetPolygon(
 
     if (
       intersection &&
-      isPointInsideOrOnPolygon(intersection, points)
+      isPointWithinInteriorInset(intersection, points, inset)
     ) {
       appendUniqueRoundedPoint(insetPolygon, intersection);
       continue;
     }
 
-    if (isPointInsideOrOnPolygon(previousOffsetPoint, points)) {
+    if (isPointWithinInteriorInset(previousOffsetPoint, points, inset)) {
       appendUniqueRoundedPoint(insetPolygon, previousOffsetPoint);
     }
 
-    if (isPointInsideOrOnPolygon(nextOffsetPoint, points)) {
+    if (isPointWithinInteriorInset(nextOffsetPoint, points, inset)) {
       appendUniqueRoundedPoint(insetPolygon, nextOffsetPoint);
     }
+  }
+
+  if (preservesInsetVertexPairing(points, insetPolygon, signedArea)) {
+    return insetPolygon;
   }
 
   const normalizedInsetPolygon = normalizePolygonTopology(insetPolygon);
@@ -761,17 +809,326 @@ function createInteriorInsetPolygon(
     normalizedInsetPolygon,
     signedArea,
   );
-  const insetArea = computeSignedArea(validatedInsetPolygon);
+  const parallelInsetPolygon = createParallelPolygon(points, inset);
+  const collapsedSourcePolygon = collapseNarrowInsetExcursions(
+    points,
+    inset * 2,
+  );
+  const collapsedSourceInsetPolygon =
+    collapsedSourcePolygon.length < points.length
+      ? createParallelPolygon(collapsedSourcePolygon, inset)
+      : [];
+  const collapsedSourceInsetArea = Math.abs(
+    computeSignedArea(collapsedSourceInsetPolygon),
+  );
+  const validatedInsetArea = Math.abs(computeSignedArea(validatedInsetPolygon));
 
   if (
-    validatedInsetPolygon.length < 3 ||
-    Math.abs(insetArea) <= PARALLEL_LINE_EPSILON ||
-    insetArea * signedArea <= 0
+    isUsableInsetCandidate(
+      points,
+      signedArea,
+      collapsedSourceInsetPolygon,
+    ) &&
+    collapsedSourceInsetArea >=
+      Math.max(validatedInsetArea * 0.75, PARALLEL_LINE_EPSILON)
   ) {
-    return createParallelPolygon(points, inset);
+    return normalizePolygonTopology(collapsedSourceInsetPolygon);
   }
 
-  return validatedInsetPolygon;
+  return selectPreferredInteriorInsetPolygon(
+    points,
+    signedArea,
+    insetPolygon,
+    normalizedInsetPolygon,
+    validatedInsetPolygon,
+    collapsedSourceInsetPolygon,
+    parallelInsetPolygon,
+  );
+}
+
+function preservesInsetVertexPairing(
+  sourcePolygon: readonly Viewer25DPoint2D[],
+  insetPolygon: readonly Viewer25DPoint2D[],
+  sourceSignedArea: number,
+): boolean {
+  if (insetPolygon.length !== sourcePolygon.length) {
+    return false;
+  }
+
+  const insetArea = computeSignedArea(insetPolygon);
+  const topology = inspectWallTopology(insetPolygon);
+
+  return (
+    topology.points.length === sourcePolygon.length &&
+    topology.isContinuous &&
+    !topology.isSelfIntersecting &&
+    Math.abs(insetArea) > PARALLEL_LINE_EPSILON &&
+    insetArea * sourceSignedArea > 0 &&
+    Math.abs(insetArea) < Math.abs(sourceSignedArea) - PARALLEL_LINE_EPSILON &&
+    insetPolygon.every((point) => isPointWithinInteriorInset(point, sourcePolygon, 0))
+  );
+}
+
+function selectPreferredInteriorInsetPolygon(
+  sourcePolygon: readonly Viewer25DPoint2D[],
+  sourceSignedArea: number,
+  ...candidates: readonly Viewer25DPoint2D[][]
+): Viewer25DPoint2D[] {
+  const sourceArea = Math.abs(sourceSignedArea);
+  let bestCandidate: Viewer25DPoint2D[] | null = null;
+  let bestVertexCount = Number.NEGATIVE_INFINITY;
+  let bestArea = Number.NEGATIVE_INFINITY;
+
+  for (const candidate of candidates) {
+    const candidateArea = computeSignedArea(candidate);
+    const candidateTopology = inspectWallTopology(candidate);
+    const normalizedCandidate = candidateTopology.points;
+
+    if (
+      normalizedCandidate.length < 3 ||
+      !candidateTopology.isContinuous ||
+      candidateTopology.isSelfIntersecting ||
+      Math.abs(candidateArea) <= PARALLEL_LINE_EPSILON ||
+      candidateArea * sourceSignedArea <= 0 ||
+      Math.abs(candidateArea) >= sourceArea - PARALLEL_LINE_EPSILON ||
+      !normalizedCandidate.every((point) => isPointInsideOrOnPolygon(point, sourcePolygon))
+    ) {
+      continue;
+    }
+
+    const candidateAreaMagnitude = Math.abs(candidateArea);
+
+    if (normalizedCandidate.length < bestVertexCount) {
+      continue;
+    }
+
+    if (
+      normalizedCandidate.length === bestVertexCount &&
+      candidateAreaMagnitude <= bestArea
+    ) {
+      continue;
+    }
+
+    bestCandidate = [...normalizedCandidate];
+    bestVertexCount = normalizedCandidate.length;
+    bestArea = candidateAreaMagnitude;
+  }
+
+  return bestCandidate ?? [...sourcePolygon];
+}
+
+function isUsableInsetCandidate(
+  sourcePolygon: readonly Viewer25DPoint2D[],
+  sourceSignedArea: number,
+  candidate: readonly Viewer25DPoint2D[],
+): boolean {
+  if (candidate.length < 3) {
+    return false;
+  }
+
+  const candidateArea = computeSignedArea(candidate);
+  const candidateTopology = inspectWallTopology(candidate);
+
+  return (
+    candidateTopology.isContinuous &&
+    !candidateTopology.isSelfIntersecting &&
+    Math.abs(candidateArea) > PARALLEL_LINE_EPSILON &&
+    candidateArea * sourceSignedArea > 0 &&
+    Math.abs(candidateArea) <
+      Math.abs(sourceSignedArea) - PARALLEL_LINE_EPSILON &&
+    candidateTopology.points.every((point) => isPointInsideOrOnPolygon(point, sourcePolygon))
+  );
+}
+
+function isPointWithinInteriorInset(
+  point: Viewer25DPoint2D,
+  polygon: readonly Viewer25DPoint2D[],
+  _inset: number,
+): boolean {
+  return isPointInsideOrOnPolygon(point, polygon);
+}
+
+function measureMinimumDistanceToPolygonEdges(
+  point: Viewer25DPoint2D,
+  polygon: readonly Viewer25DPoint2D[],
+): number {
+  let minimumDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    minimumDistance = Math.min(
+      minimumDistance,
+      measureDistanceToSegment(point, start, end),
+    );
+  }
+
+  return minimumDistance;
+}
+
+function measureDistanceToSegment(
+  point: Viewer25DPoint2D,
+  start: Viewer25DPoint2D,
+  end: Viewer25DPoint2D,
+): number {
+  const delta = {
+    x: end.x - start.x,
+    y: end.y - start.y,
+  };
+  const squaredLength = delta.x * delta.x + delta.y * delta.y;
+
+  if (squaredLength <= PARALLEL_LINE_EPSILON) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+
+  const projection = clamp(
+    ((point.x - start.x) * delta.x + (point.y - start.y) * delta.y) /
+      squaredLength,
+    0,
+    1,
+  );
+  const closestPoint = {
+    x: start.x + delta.x * projection,
+    y: start.y + delta.y * projection,
+  };
+
+  return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y);
+}
+
+function collapseNarrowInsetExcursions(
+  points: readonly Viewer25DPoint2D[],
+  threshold: number,
+): Viewer25DPoint2D[] {
+  if (points.length < 6 || threshold <= PARALLEL_LINE_EPSILON) {
+    return [...points];
+  }
+
+  let simplifiedPoints = [...points];
+  let didCollapse = true;
+
+  while (didCollapse && simplifiedPoints.length >= 6) {
+    didCollapse = false;
+
+    for (let index = 0; index < simplifiedPoints.length; index += 1) {
+      const previous = simplifiedPoints[
+        (index - 1 + simplifiedPoints.length) % simplifiedPoints.length
+      ];
+      const entry = simplifiedPoints[index];
+      const excursionStart =
+        simplifiedPoints[(index + 1) % simplifiedPoints.length];
+      const excursionEnd =
+        simplifiedPoints[(index + 2) % simplifiedPoints.length];
+      const exit = simplifiedPoints[(index + 3) % simplifiedPoints.length];
+      const next =
+        simplifiedPoints[(index + 4) % simplifiedPoints.length];
+
+      if (
+        !isCollapsibleInsetExcursion(
+          previous,
+          entry,
+          excursionStart,
+          excursionEnd,
+          exit,
+          next,
+          threshold,
+        )
+      ) {
+        continue;
+      }
+
+      simplifiedPoints = simplifiedPoints.filter((_, candidateIndex) => {
+        const normalizedIndex =
+          (candidateIndex - index + simplifiedPoints.length) %
+          simplifiedPoints.length;
+
+        return normalizedIndex < 0 || normalizedIndex > 3;
+      });
+      didCollapse = true;
+      break;
+    }
+  }
+
+  return simplifiedPoints.map(roundPoint);
+}
+
+function isCollapsibleInsetExcursion(
+  previous: Viewer25DPoint2D,
+  entry: Viewer25DPoint2D,
+  excursionStart: Viewer25DPoint2D,
+  excursionEnd: Viewer25DPoint2D,
+  exit: Viewer25DPoint2D,
+  next: Viewer25DPoint2D,
+  threshold: number,
+): boolean {
+  const entryDirection = normalizeVector({
+    x: excursionStart.x - entry.x,
+    y: excursionStart.y - entry.y,
+  });
+  const exitDirection = normalizeVector({
+    x: exit.x - excursionEnd.x,
+    y: exit.y - excursionEnd.y,
+  });
+  const approachDirection = normalizeVector({
+    x: entry.x - previous.x,
+    y: entry.y - previous.y,
+  });
+  const departureDirection = normalizeVector({
+    x: next.x - exit.x,
+    y: next.y - exit.y,
+  });
+
+  if (
+    entryDirection == null ||
+    exitDirection == null ||
+    approachDirection == null ||
+    departureDirection == null
+  ) {
+    return false;
+  }
+
+  const bridgeWidth = Math.hypot(
+    excursionEnd.x - excursionStart.x,
+    excursionEnd.y - excursionStart.y,
+  );
+  const mouthWidth = Math.hypot(exit.x - entry.x, exit.y - entry.y);
+
+  return (
+    bridgeWidth <= threshold + PARALLEL_LINE_EPSILON &&
+    mouthWidth <= threshold + PARALLEL_LINE_EPSILON &&
+    Math.abs(dotProduct(entryDirection, exitDirection) + 1) <= 1e-3 &&
+    Math.abs(crossProduct(entryDirection, exitDirection)) <= 1e-3 &&
+    Math.abs(dotProduct(approachDirection, departureDirection) - 1) <= 1e-3 &&
+    Math.abs(crossProduct(approachDirection, departureDirection)) <= 1e-3
+  );
+}
+
+function normalizeVector(
+  vector: Viewer25DPoint2D,
+): Viewer25DPoint2D | null {
+  const length = Math.hypot(vector.x, vector.y);
+
+  if (length <= PARALLEL_LINE_EPSILON) {
+    return null;
+  }
+
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+function dotProduct(
+  left: Viewer25DPoint2D,
+  right: Viewer25DPoint2D,
+): number {
+  return left.x * right.x + left.y * right.y;
+}
+
+function crossProduct(
+  left: Viewer25DPoint2D,
+  right: Viewer25DPoint2D,
+): number {
+  return left.x * right.y - left.y * right.x;
 }
 
 function appendUniqueRoundedPoint(

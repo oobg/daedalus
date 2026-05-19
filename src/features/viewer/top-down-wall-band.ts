@@ -28,7 +28,7 @@ export function createTopDownWallBandPath(
   thickness?: number,
 ): TopDownWallBandPath | null {
   if (!Array.isArray(pointsOrWallBand)) {
-    return createTopDownWallBandPathFromWallBand(pointsOrWallBand);
+    return createTopDownWallBandPathFromWallBand(pointsOrWallBand as WallBandRing);
   }
 
   if (typeof thickness !== "number" || !Number.isFinite(thickness) || thickness <= 0) {
