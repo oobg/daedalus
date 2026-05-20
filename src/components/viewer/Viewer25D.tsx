@@ -86,6 +86,7 @@ interface CameraTransitionState {
   endZoom: number;
   elapsed: number;
   readonly duration: number;
+  readonly isCrossType: boolean;
 }
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
@@ -903,6 +904,7 @@ function SceneCameraController({
       endZoom,
       elapsed: 0,
       duration: CAMERA_TRANSITION_DURATION,
+      isCrossType,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraModeConfig]);
@@ -934,7 +936,15 @@ function SceneCameraController({
     cam.updateProjectionMatrix();
 
     if (raw >= 1) {
-      applyViewerCameraModeConfig(cam, targetConfigRef.current);
+      // Cross-type: the canvas orthographic prop is about to flip (canvasOrthographic
+      // state update queued in onCompleteRef call below), so a new camera of the
+      // correct type will be created. Applying the target config — especially zoom —
+      // to the current wrong-type camera (e.g. ortho zoom=32 on PerspectiveCamera)
+      // would produce one distorted frame before the new camera is ready.
+      // The [camera] useEffect handles applying full config to the new camera.
+      if (!t.isCrossType) {
+        applyViewerCameraModeConfig(cam, targetConfigRef.current);
+      }
       transitionRef.current = null;
       onCompleteRef.current?.();
     }
