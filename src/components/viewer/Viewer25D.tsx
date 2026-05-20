@@ -54,10 +54,11 @@ import { createViewer25DTopDownHandleOverlayScene } from "./viewer25dTopDownHand
 import { resolveViewer25DSharedSceneInstance } from "./viewer25dSharedScene";
 
 // ── Visual palette ────────────────────────────────────────────────────────────
-const FLOOR_COLORS      = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
-const WALL_HEIGHT_SCALE = DEFAULT_WALL_HEIGHT_SCALE;
-const WALL_THICKNESS    = DEFAULT_WALL_THICKNESS;  // world units (~4.5cm at 1:100)
-const WALL_TOP_EDGE_RADIUS = 0.011;
+const FLOOR_COLORS           = ["#DDD8CF", "#D1CCC3", "#C5C0B7", "#B9B4AC", "#AEA9A2"];
+const WALL_HEIGHT_SCALE      = DEFAULT_WALL_HEIGHT_SCALE;
+const WALL_THICKNESS         = DEFAULT_WALL_THICKNESS;  // world units (~4.5cm at 1:100)
+const EXTERIOR_WALL_THICKNESS = 0.072;                  // matches getExteriorWallMeshOptions default
+const WALL_TOP_EDGE_RADIUS   = 0.011;
 const INTERIOR_WALL_SHADING = getWallShadingConfig("interior");
 const EXTERIOR_WALL_SHADING = getWallShadingConfig("exterior");
 const WINDOW_GLASS_MATERIAL = getGlassMaterialConfig("windowPane");
@@ -511,6 +512,7 @@ function RoomMesh({
                 />
                 <meshStandardMaterial
                   {...INTERIOR_WALL_SHADING}
+                  side={THREE.DoubleSide}
                   transparent={meshTransparent}
                   opacity={meshOpacity}
                 />
@@ -811,6 +813,19 @@ interface ExteriorWallProps {
 
 function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
   const wallH = resolveViewer25DFloorExtrusionDepth(totalHeight, WALL_HEIGHT_SCALE);
+  const exteriorWallBandShape = useMemo(() => {
+    const wallBand = createTopDownWallBandPath(
+      points.map((point) => ({
+        x: point.x / 100,
+        y: point.y / 100,
+      })),
+      EXTERIOR_WALL_THICKNESS,
+    );
+    if (wallBand == null) {
+      return null;
+    }
+    return createTopDownWallBandShape(wallBand);
+  }, [points]);
   const wallMeshAssembly = useMemo(
     () =>
       createExteriorWallMeshAssembly(
@@ -827,16 +842,26 @@ function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
 
   return (
     <group>
-      {wallMeshAssembly.meshes.map((wallMesh, index) => (
-        <mesh
-          key={`${wallMesh.source}-${index}`}
-          geometry={wallMesh.geometry}
-          position={wallMesh.position}
-          rotation={wallMesh.rotation}
-        >
-          <meshStandardMaterial {...EXTERIOR_WALL_SHADING} />
-        </mesh>
-      ))}
+      {exteriorWallBandShape != null
+        ? (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+              <extrudeGeometry
+                args={[exteriorWallBandShape, { depth: wallH, bevelEnabled: false }]}
+              />
+              <meshStandardMaterial {...EXTERIOR_WALL_SHADING} side={THREE.DoubleSide} />
+            </mesh>
+          )
+        : wallMeshAssembly.meshes.map((wallMesh, index) => (
+            <mesh
+              key={`${wallMesh.source}-${index}`}
+              geometry={wallMesh.geometry}
+              position={wallMesh.position}
+              rotation={wallMesh.rotation}
+            >
+              <meshStandardMaterial {...EXTERIOR_WALL_SHADING} />
+            </mesh>
+          ))
+      }
     </group>
   );
 }
