@@ -459,10 +459,6 @@ function RoomMesh({
     [points, wallBaseOffset, wallH],
   );
   const topDownWallBandShape = useMemo(() => {
-    if (cameraMode !== "top-down-orthographic") {
-      return null;
-    }
-
     const wallBand = createTopDownWallBandPath(
       points.map((point) => ({
         x: point.x / 100,
@@ -476,7 +472,7 @@ function RoomMesh({
     }
 
     return createTopDownWallBandShape(wallBand);
-  }, [cameraMode, points]);
+  }, [points]);
 
   const labelX = points.reduce((s, p) => s + p.x, 0) / points.length / 100;
   const labelZ = points.reduce((s, p) => s + p.y, 0) / points.length / 100;
@@ -488,7 +484,7 @@ function RoomMesh({
 
   return (
     <group position={[0, floorRenderY, 0]}>
-      {/* Edit mode renders one closed wall-band fill; preview keeps full wall meshes. */}
+      {/* Wall band ring — top-down uses flat shapeGeometry; perspective extrudes upward. */}
       {cameraMode === "top-down-orthographic"
         ? topDownWallBandShape != null && (
             <mesh
@@ -504,20 +500,36 @@ function RoomMesh({
               />
             </mesh>
           )
-        : wallMeshAssembly.meshes.map((wallMesh, index) => (
-            <mesh
-              key={`${wallMesh.source}-${index}`}
-              geometry={wallMesh.geometry}
-              position={wallMesh.position}
-              rotation={wallMesh.rotation}
-            >
-              <meshStandardMaterial
-                {...INTERIOR_WALL_SHADING}
-                transparent={meshTransparent}
-                opacity={meshOpacity}
-              />
-            </mesh>
-          ))}
+        : topDownWallBandShape != null
+          ? (
+              <mesh
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, wallBaseOffset, 0]}
+              >
+                <extrudeGeometry
+                  args={[topDownWallBandShape, { depth: wallH, bevelEnabled: false }]}
+                />
+                <meshStandardMaterial
+                  {...INTERIOR_WALL_SHADING}
+                  transparent={meshTransparent}
+                  opacity={meshOpacity}
+                />
+              </mesh>
+            )
+          : wallMeshAssembly.meshes.map((wallMesh, index) => (
+              <mesh
+                key={`${wallMesh.source}-${index}`}
+                geometry={wallMesh.geometry}
+                position={wallMesh.position}
+                rotation={wallMesh.rotation}
+              >
+                <meshStandardMaterial
+                  {...INTERIOR_WALL_SHADING}
+                  transparent={meshTransparent}
+                  opacity={meshOpacity}
+                />
+              </mesh>
+            ))}
 
       {/* Floor plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, floorBaseOffset, 0]}>
