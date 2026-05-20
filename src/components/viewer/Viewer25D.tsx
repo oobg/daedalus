@@ -834,9 +834,9 @@ function SceneCameraController({
   onTransitionComplete?: () => void;
 }) {
   const { camera } = useThree();
-  // Keep a ref so useEffect and useFrame always access the current camera object
-  // without capturing a stale closure — critical because R3F replaces the camera
-  // object (in its own internal useEffect) when the Canvas orthographic prop changes.
+  // Always keep cameraRef current — R3F may replace the camera object when the
+  // Canvas orthographic prop changes, and both the effect and useFrame need the
+  // latest instance without a stale closure.
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
 
@@ -848,17 +848,19 @@ function SceneCameraController({
   const targetConfigRef = useRef(cameraModeConfig);
   targetConfigRef.current = cameraModeConfig;
 
+  // Tracks the last cameraModeConfig value for which we actually ran the setup
+  // logic — used to detect React StrictMode's double-invocation of useEffect.
+  // In StrictMode, effects run twice with the same deps: the first run updates
+  // prevConfigRef, so the second run would see prevConfig == cameraModeConfig,
+  // compute startPos == endPos, and install a zero-length no-op transition that
+  // silently cancels the animation (camera snaps instead of easing).
+  const handledConfigRef = useRef<typeof cameraModeConfig | null>(null);
+
   useEffect(() => {
-    // Intentionally omit `camera` from deps. R3F creates a new camera object in its
-    // own internal effect when the Canvas orthographic prop changes. If `camera` were
-    // in the deps array this effect would fire a second time with the new camera
-    // object, see prevConfig == cameraModeConfig (already updated), compute
-    // startPos == endPos, and install a zero-length "transition" that cancels the
-    // real animation — causing the scene to snap to the destination instead of easing.
-    //
-    // By depending only on cameraModeConfig we fire exactly once per mode switch.
-    // cameraRef.current always points to the live camera, so any subsequent camera
-    // object replacement by R3F is transparently handled by useFrame below.
+    // Skip if this config was already handled — guards against StrictMode double-fire.
+    if (handledConfigRef.current === cameraModeConfig) return;
+    handledConfigRef.current = cameraModeConfig;
+
     const cam = cameraRef.current;
     const prevConfig = prevConfigRef.current;
     prevConfigRef.current = cameraModeConfig;
