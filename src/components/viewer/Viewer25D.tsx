@@ -75,6 +75,22 @@ const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
 // world X = canvasX / 100
 // world Z = canvasY / 100  (shape uses -canvasY/100 in shape-space; rotation negates)
 
+function isPointInPolygon(
+  point: { x: number; y: number },
+  polygon: readonly { x: number; y: number }[],
+): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    if (((yi > point.y) !== (yj > point.y)) &&
+        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 function polygonToShape(points: EditorPoint[]): THREE.Shape {
   const shape = new THREE.Shape();
   if (points.length < 3) return shape;
@@ -950,6 +966,16 @@ export default function Viewer25D({
       }),
     [cameraMode, sharedSceneGraph],
   );
+  const visibleRoomNodes = useMemo(() => {
+    if (!exteriorPolygon || exteriorPolygon.length < 3) return renderPlan.roomNodes;
+    return renderPlan.roomNodes.filter((roomNode) => {
+      const n = roomNode.points.length;
+      if (n === 0) return false;
+      const cx = roomNode.points.reduce((s, p) => s + p.x, 0) / n;
+      const cy = roomNode.points.reduce((s, p) => s + p.y, 0) / n;
+      return isPointInPolygon({ x: cx, y: cy }, exteriorPolygon);
+    });
+  }, [renderPlan.roomNodes, exteriorPolygon]);
   const viewportState = useMemo(
     () =>
       resolveViewerViewportState({
@@ -1054,7 +1080,7 @@ export default function Viewer25D({
                   isActive={true}
                 />
               ))}
-            {renderPlan.roomNodes.map((roomNode) => (
+            {visibleRoomNodes.map((roomNode) => (
               <RoomMesh
                 key={roomNode.nodeId}
                 points={roomNode.points}
@@ -1079,6 +1105,7 @@ export default function Viewer25D({
         </Suspense>
 
         <OrbitControls
+          key={cameraMode}
           enablePan={cameraMode === "perspective" || activeTool === "select"}
           enableZoom
           enableDamping
