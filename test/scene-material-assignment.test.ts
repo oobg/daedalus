@@ -10,6 +10,9 @@ import {
   type AppliedSceneMaterialAssignments,
 } from "../src/features/viewer/index.ts";
 import { type RenderSceneData } from "../src/features/renderer/index.ts";
+import { resolveRenderSceneRoomLayers } from "../src/features/renderer/render-scene-layering.ts";
+
+const DEFAULT_LAYERS = resolveRenderSceneRoomLayers();
 
 test("applySceneElementRenderMaterials resolves classified scene elements into immutable scene-level material assignments", () => {
   const applied = applySceneElementRenderMaterials(createRenderScene());
@@ -180,6 +183,7 @@ function createRenderScene(): RenderSceneData {
             area: 48,
             labelPosition: { x: 4, y: 3 },
             bounds: null,
+            layers: DEFAULT_LAYERS,
             walls: [
               {
                 edgeId: "edge-lobby-north",

@@ -18,12 +18,11 @@ import {
   type FurnitureRenderMaterial,
 } from "./furniture-material-styling.ts";
 
-export interface FurnitureTypeCompositionMesh
-  extends BuiltFurniturePrimitive {
+export type FurnitureTypeCompositionMesh = BuiltFurniturePrimitive & {
   materialTag: FurnitureDescriptorMaterialTag;
   meshId: string;
   renderMaterial: Readonly<FurnitureRenderMaterial>;
-}
+};
 
 export interface FurnitureTypeComposition {
   descriptorType: "handcrafted-model" | "primitive-composition";
@@ -94,6 +93,8 @@ function createFallbackPrimitiveDescriptor(
   descriptor: HandcraftedModelFurnitureDescriptor,
 ): PrimitiveFurnitureDescriptor {
   switch (furnitureType) {
+    default:
+      throw new Error(`No fallback primitive descriptor for furniture type: ${furnitureType}`);
     case "sofa":
       return freezePrimitiveDescriptor({
         descriptorType: "primitive-composition",
@@ -201,5 +202,5 @@ function freezeCompositionMesh(
       ...mesh.renderMaterial,
       config: Object.freeze({ ...mesh.renderMaterial.config }),
     }),
-  });
+  }) as FurnitureTypeCompositionMesh;
 }

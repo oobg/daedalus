@@ -64,7 +64,7 @@ export function normalizeFurnitureProportionStyling(
   let adjustedMeshCount = 0;
 
   const styledMeshes = meshes.map((mesh) => {
-    const adjustment = adjustmentsByPart[mesh.partId];
+    const adjustment = (adjustmentsByPart as Record<string, Readonly<FurnitureScaleAdjustment> | undefined>)[mesh.partId];
 
     if (adjustment == null) {
       return mesh;

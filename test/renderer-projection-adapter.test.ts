@@ -64,9 +64,7 @@ test("adaptReadonlyEditorStateProjectionToRenderScene accepts normalized readonl
         activeFloorId: "floor-1",
         selectedRoomId: "room-lobby",
       },
-      metadata: {
-        editorOnly: true,
-      },
+      metadata: {},
     }),
     {
       projectedAt: new Date("2026-05-18T08:00:00.000Z"),

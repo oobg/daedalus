@@ -238,7 +238,7 @@ test("createWallJunctionAssembly preserves quadrilateral outer-contour vertex or
 
   for (const [index, point] of preservedOuterOutline.entries()) {
     const inputPoint = expectedOuterOutline[index];
-    const nextPoint = preservedOuterOutline[(index + 1) % preservedOuterOutline.length];
+    const nextPoint: (typeof preservedOuterOutline)[number] = preservedOuterOutline[(index + 1) % preservedOuterOutline.length];
     const nextInputPoint = expectedOuterOutline[(index + 1) % expectedOuterOutline.length];
 
     assert.deepEqual(

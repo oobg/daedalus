@@ -7,11 +7,11 @@ import {
   type EditorProject,
   type EditorRoom,
   type EditorVerticalConnector,
+  type EditorWallSegment,
   type RoomOpening,
   type SharedBoundaryRef,
 } from "../../domain/editor-state.ts";
 import type { EditorOpening } from "../../domain/opening.ts";
-import type { EditorWallSegment } from "../../domain/wall.ts";
 
 export interface SerializedEditorProjectPoint {
   x: number;

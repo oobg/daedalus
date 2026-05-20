@@ -706,7 +706,7 @@ test("adaptProjectSnapshotToRenderScene derives each floor placement from the cu
       (cumulativeLowerFloorHeight + floor.floorHeight).toFixed(6),
     );
     cumulativeRenderHeight = Number(
-      (cumulativeRenderHeight + floor.renderHeight).toFixed(6),
+      (cumulativeRenderHeight + floor.renderHeight!).toFixed(6),
     );
   });
 

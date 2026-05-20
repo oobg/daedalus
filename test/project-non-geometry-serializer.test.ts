@@ -119,14 +119,14 @@ test("serializeProjectNonGeometryData clones mutable fields and applies editor c
 
   assert.notEqual(serialized.assets, data.assets);
   assert.notEqual(serialized.annotations, data.annotations);
-  assert.notEqual(serialized.annotations[0].position, data.annotations[0].position);
+  assert.notEqual(serialized.annotations![0].position, data.annotations![0].position);
   assert.deepEqual(serialized.editorConfig, {
     ...DEFAULT_SERIALIZED_PROJECT_EDITOR_CONFIG,
     selectedTool: "select",
     showRoomLabels: false,
   });
 
-  data.annotations[0].position.x = 99;
+  data.annotations![0].position.x = 99;
   assert.deepEqual(serialized.annotations[0].position, { x: 10, y: 4 });
 });
 

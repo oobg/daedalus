@@ -274,5 +274,5 @@ function freezePrimitive<T extends BuiltFurniturePrimitive>(primitive: T): T {
     dimensions: Object.freeze({ ...primitive.dimensions }),
     position: Object.freeze({ ...primitive.position }),
     geometryArgs: Object.freeze([...primitive.geometryArgs]) as T["geometryArgs"],
-  });
+  }) as unknown as T;
 }

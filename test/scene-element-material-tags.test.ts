@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { type RenderSceneData } from "../src/features/renderer/index.ts";
+import { resolveRenderSceneRoomLayers } from "../src/features/renderer/render-scene-layering.ts";
 import { classifySceneElementMaterialTags } from "../src/features/viewer/index.ts";
+
+const DEFAULT_LAYERS = resolveRenderSceneRoomLayers();
 
 test("classifySceneElementMaterialTags assigns wall, wood-accent, and glass tags from render scene elements", () => {
   const assignments = classifySceneElementMaterialTags(createRenderScene());
@@ -107,6 +110,7 @@ test("classifySceneElementMaterialTags normalizes window detection and returns a
             area: 0,
             labelPosition: null,
             bounds: null,
+            layers: DEFAULT_LAYERS,
             walls: [],
             openings: [
               {
@@ -154,6 +158,7 @@ function createRenderScene(): RenderSceneData {
             area: 48,
             labelPosition: { x: 4, y: 3 },
             bounds: null,
+            layers: DEFAULT_LAYERS,
             walls: [
               {
                 edgeId: "edge-lobby-north",
@@ -210,6 +215,7 @@ function createRenderScene(): RenderSceneData {
             area: 24,
             labelPosition: { x: 3, y: 2 },
             bounds: null,
+            layers: DEFAULT_LAYERS,
             walls: [],
             openings: [
               {

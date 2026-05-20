@@ -231,7 +231,7 @@ function resolveCompositeElements(node: ReactNode): ReactNode {
   return createElement(
     node.type,
     {
-      ...node.props,
+      ...(node.props as object),
     },
     props.children === undefined ? undefined : resolveCompositeElements(props.children),
   ) as ReactElement;

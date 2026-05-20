@@ -488,13 +488,11 @@ test("createReadonlyEditorStateProjection freezes the viewer and renderer projec
   );
 
   assert.throws(() => {
-    ((
-      projection.project.floors[0].rooms[0].roomPolygon as {
+    (
+      projection.project.floors[0].rooms[0].roomPolygon as unknown as {
         push(point: { x: number; y: number }): void;
       }
-    ) as unknown as {
-      push(point: { x: number; y: number }): void;
-    }).push({ x: 99, y: 99 });
+    ).push({ x: 99, y: 99 });
   }, TypeError);
   assert.throws(() => {
     (

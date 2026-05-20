@@ -266,7 +266,7 @@ function freezeDescriptor<T extends NormalizedFurnitureDescriptor>(
           ),
         }
       : {}),
-  });
+  }) as Readonly<T>;
 }
 
 function isValidPrimitivePart(

@@ -327,7 +327,7 @@ test("restoreStoredProjectState defaults missing floor heights from older localS
   delete floors[0].floorHeight;
 
   saveProjectToLocalStorage(
-    serialized as SerializedProjectData,
+    serialized as unknown as SerializedProjectData,
     storage,
     new Date("2026-05-13T14:00:00.000Z"),
   );
