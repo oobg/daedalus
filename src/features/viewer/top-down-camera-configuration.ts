@@ -109,7 +109,7 @@ export function resolveTopDownCameraConfiguration(
     position: [
       sceneBounds.centerX,
       maxSpan * 2 + CAMERA_PADDING,
-      sceneBounds.centerZ + 0.001,
+      sceneBounds.centerZ,
     ] as const,
     up: TOP_DOWN_UP,
     lookAt: [sceneBounds.centerX, 0, sceneBounds.centerZ] as const,

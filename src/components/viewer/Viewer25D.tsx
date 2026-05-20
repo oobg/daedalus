@@ -553,25 +553,27 @@ function RoomMesh({
         />
       </mesh>
 
-      {/* Room label — floats above wall tops */}
-      <Html
-        position={[labelX, wallH + 0.1, labelZ]}
-        center
-        style={{
-          pointerEvents: "none",
-          userSelect: "none",
-          fontSize: "11px",
-          color: "#333",
-          background: "rgba(255,255,255,0.82)",
-          padding: "1px 5px",
-          borderRadius: "3px",
-          whiteSpace: "nowrap",
-          border: "1px solid rgba(0,0,0,0.08)",
-          fontFamily: "Pretendard, -apple-system, sans-serif",
-        }}
-      >
-        {label}
-      </Html>
+      {/* Room label — 2.5D 에서만 표시 */}
+      {cameraMode !== "top-down-orthographic" && (
+        <Html
+          position={[labelX, wallH + 0.1, labelZ]}
+          center
+          style={{
+            pointerEvents: "none",
+            userSelect: "none",
+            fontSize: "11px",
+            color: "#333",
+            background: "rgba(255,255,255,0.82)",
+            padding: "1px 5px",
+            borderRadius: "3px",
+            whiteSpace: "nowrap",
+            border: "1px solid rgba(0,0,0,0.08)",
+            fontFamily: "Pretendard, -apple-system, sans-serif",
+          }}
+        >
+          {label}
+        </Html>
+      )}
 
       {/* Opening markers */}
       {openings.map(op => (
@@ -809,9 +811,10 @@ function SceneCameraController({
 interface ExteriorWallProps {
   points: readonly EditorPoint[];
   totalHeight: number;
+  cameraMode: ViewerCameraMode;
 }
 
-function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
+function ExteriorWall({ points, totalHeight, cameraMode }: ExteriorWallProps) {
   const wallH = resolveViewer25DFloorExtrusionDepth(totalHeight, WALL_HEIGHT_SCALE);
   const exteriorWallBandShape = useMemo(() => {
     const wallBand = createTopDownWallBandPath(
@@ -843,14 +846,21 @@ function ExteriorWall({ points, totalHeight }: ExteriorWallProps) {
   return (
     <group>
       {exteriorWallBandShape != null
-        ? (
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-              <extrudeGeometry
-                args={[exteriorWallBandShape, { depth: wallH, bevelEnabled: false }]}
-              />
-              <meshStandardMaterial {...EXTERIOR_WALL_SHADING} side={THREE.DoubleSide} />
-            </mesh>
-          )
+        ? cameraMode === "top-down-orthographic"
+          ? (
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, wallH + 0.0005, 0]}>
+                <shapeGeometry args={[exteriorWallBandShape]} />
+                <meshStandardMaterial {...EXTERIOR_WALL_SHADING} side={THREE.DoubleSide} />
+              </mesh>
+            )
+          : (
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+                <extrudeGeometry
+                  args={[exteriorWallBandShape, { depth: wallH, bevelEnabled: false }]}
+                />
+                <meshStandardMaterial {...EXTERIOR_WALL_SHADING} side={THREE.DoubleSide} />
+              </mesh>
+            )
         : wallMeshAssembly.meshes.map((wallMesh, index) => (
             <mesh
               key={`${wallMesh.source}-${index}`}
@@ -1029,6 +1039,7 @@ export default function Viewer25D({
               <ExteriorWall
                 points={renderPlan.exteriorNode.points}
                 totalHeight={renderPlan.exteriorNode.totalHeight}
+                cameraMode={cameraMode}
               />
             )}
             {renderPlan.exteriorNode != null &&
@@ -1063,15 +1074,15 @@ export default function Viewer25D({
               geometrySource: renderPlan,
               cameraMode,
             })}
-            <DrawingLayer sceneCenter={sceneCenter} />
+            {cameraMode === "top-down-orthographic" && <DrawingLayer sceneCenter={sceneCenter} />}
           </group>
         </Suspense>
 
         <OrbitControls
-          enablePan={activeTool === "select"}
+          enablePan={cameraMode === "perspective" || activeTool === "select"}
           enableZoom
           enableDamping
-          enableRotate={activeTool === "select" && cameraModeConfig.enableRotate}
+          enableRotate={(cameraMode === "perspective" || activeTool === "select") && cameraModeConfig.enableRotate}
           dampingFactor={0.08} rotateSpeed={0.5} zoomSpeed={0.6}
           minPolarAngle={cameraModeConfig.minPolarAngle}
           maxPolarAngle={cameraModeConfig.maxPolarAngle}
