@@ -834,6 +834,12 @@ function SceneCameraController({
   onTransitionComplete?: () => void;
 }) {
   const { camera } = useThree();
+  // Keep a ref so useEffect and useFrame always access the current camera object
+  // without capturing a stale closure — critical because R3F replaces the camera
+  // object (in its own internal useEffect) when the Canvas orthographic prop changes.
+  const cameraRef = useRef(camera);
+  cameraRef.current = camera;
+
   const isFirstMount = useRef(true);
   const prevConfigRef = useRef<typeof cameraModeConfig | null>(null);
   const transitionRef = useRef<CameraTransitionState | null>(null);
@@ -843,17 +849,28 @@ function SceneCameraController({
   targetConfigRef.current = cameraModeConfig;
 
   useEffect(() => {
+    // Intentionally omit `camera` from deps. R3F creates a new camera object in its
+    // own internal effect when the Canvas orthographic prop changes. If `camera` were
+    // in the deps array this effect would fire a second time with the new camera
+    // object, see prevConfig == cameraModeConfig (already updated), compute
+    // startPos == endPos, and install a zero-length "transition" that cancels the
+    // real animation — causing the scene to snap to the destination instead of easing.
+    //
+    // By depending only on cameraModeConfig we fire exactly once per mode switch.
+    // cameraRef.current always points to the live camera, so any subsequent camera
+    // object replacement by R3F is transparently handled by useFrame below.
+    const cam = cameraRef.current;
     const prevConfig = prevConfigRef.current;
     prevConfigRef.current = cameraModeConfig;
 
     if (isFirstMount.current) {
       isFirstMount.current = false;
-      applyViewerCameraModeConfig(camera, cameraModeConfig);
+      applyViewerCameraModeConfig(cam, cameraModeConfig);
       return;
     }
 
     if (prevConfig == null) {
-      applyViewerCameraModeConfig(camera, cameraModeConfig);
+      applyViewerCameraModeConfig(cam, cameraModeConfig);
       return;
     }
 
@@ -862,21 +879,20 @@ function SceneCameraController({
     const endPos = new THREE.Vector3(...cameraModeConfig.position);
     const endUp = new THREE.Vector3(...cameraModeConfig.up);
 
-    // Ortho zoom (32-48) applied to a PerspectiveCamera would cause a huge zoom-out.
-    // For ortho→perspective transitions, fix startZoom at 1.
+    // OrthographicCamera zoom (32-48) is meaningless on a PerspectiveCamera —
+    // applying it would cause extreme telephoto (narrow FOV). Fix startZoom at 1
+    // for ortho→perspective so only the position animates, not the zoom.
     const isCrossType = prevConfig.orthographic !== cameraModeConfig.orthographic;
     const startZoom = isCrossType && !cameraModeConfig.orthographic ? 1 : (prevConfig.zoom ?? 1);
     const endZoom = cameraModeConfig.zoom ?? 1;
 
-    // Reset camera to the previous-mode position so the animation starts from there.
-    // R3F may have already moved it to the new position when the camera type switched.
-    camera.position.copy(startPos);
-    camera.up.copy(startUp);
-    camera.zoom = startZoom;
-    camera.near = cameraModeConfig.near;  // use target near/far to avoid clipping
-    camera.far = cameraModeConfig.far;
-    camera.lookAt(0, 0, 0);              // always face scene centre [0,0,0]
-    camera.updateProjectionMatrix();
+    cam.position.copy(startPos);
+    cam.up.copy(startUp);
+    cam.zoom = startZoom;
+    cam.near = cameraModeConfig.near;
+    cam.far = cameraModeConfig.far;
+    cam.lookAt(0, 0, 0);
+    cam.updateProjectionMatrix();
 
     transitionRef.current = {
       startPos,
@@ -888,28 +904,30 @@ function SceneCameraController({
       elapsed: 0,
       duration: CAMERA_TRANSITION_DURATION,
     };
-  }, [camera, cameraModeConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraModeConfig]);
 
   useFrame((_, delta) => {
     const t = transitionRef.current;
     if (t == null) return;
 
+    // Always use cameraRef.current so we drive whichever camera object R3F
+    // currently has in context (it may have been replaced mid-transition).
+    const cam = cameraRef.current;
+
     t.elapsed += delta;
     const raw = Math.min(t.elapsed / t.duration, 1);
     const p = easeInOutCubic(raw);
 
-    // Move camera along the interpolated path while always pointing at scene centre.
-    // Independently slerping quaternion and lerping position causes the camera to look
-    // away from the scene at intermediate frames (the root cause of the zoom-out glitch).
-    camera.position.lerpVectors(t.startPos, t.endPos, p);
+    cam.position.lerpVectors(t.startPos, t.endPos, p);
     const lerpedUp = new THREE.Vector3().lerpVectors(t.startUp, t.endUp, p).normalize();
-    camera.up.copy(lerpedUp);
-    camera.lookAt(0, 0, 0);
-    camera.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
-    camera.updateProjectionMatrix();
+    cam.up.copy(lerpedUp);
+    cam.lookAt(0, 0, 0);
+    cam.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
+    cam.updateProjectionMatrix();
 
     if (raw >= 1) {
-      applyViewerCameraModeConfig(camera, targetConfigRef.current);
+      applyViewerCameraModeConfig(cam, targetConfigRef.current);
       transitionRef.current = null;
       onCompleteRef.current?.();
     }
