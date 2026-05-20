@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Html, Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
@@ -910,8 +910,11 @@ function SceneCameraController({
   }, [cameraModeConfig]);
 
   // When canvasOrthographic flips after the animation, R3F creates a brand-new
-  // camera object. Apply the final config to it so up/lookAt/zoom are correct.
-  useEffect(() => {
+  // camera object. Apply the final config BEFORE the next RAF so there are zero
+  // frames rendered with the wrong zoom/up/lookAt on the new camera.
+  // useLayoutEffect fires synchronously after React's commit (new camera exists)
+  // but before the next requestAnimationFrame, guaranteeing no wrong frame.
+  useLayoutEffect(() => {
     if (isFirstMount.current) return;
     if (transitionRef.current != null) return;
     applyViewerCameraModeConfig(camera, targetConfigRef.current);
