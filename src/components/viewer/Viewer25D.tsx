@@ -834,9 +834,6 @@ function SceneCameraController({
   onTransitionComplete?: () => void;
 }) {
   const { camera } = useThree();
-  // Always keep cameraRef current — R3F may replace the camera object when the
-  // Canvas orthographic prop changes, and both the effect and useFrame need the
-  // latest instance without a stale closure.
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
 
@@ -848,16 +845,12 @@ function SceneCameraController({
   const targetConfigRef = useRef(cameraModeConfig);
   targetConfigRef.current = cameraModeConfig;
 
-  // Tracks the last cameraModeConfig value for which we actually ran the setup
-  // logic — used to detect React StrictMode's double-invocation of useEffect.
-  // In StrictMode, effects run twice with the same deps: the first run updates
-  // prevConfigRef, so the second run would see prevConfig == cameraModeConfig,
-  // compute startPos == endPos, and install a zero-length no-op transition that
-  // silently cancels the animation (camera snaps instead of easing).
+  // Guards against React StrictMode double-invocation of useEffect:
+  // the first run updates prevConfigRef so the second run would see
+  // prevConfig == cameraModeConfig and install a no-op transition.
   const handledConfigRef = useRef<typeof cameraModeConfig | null>(null);
 
   useEffect(() => {
-    // Skip if this config was already handled — guards against StrictMode double-fire.
     if (handledConfigRef.current === cameraModeConfig) return;
     handledConfigRef.current = cameraModeConfig;
 
@@ -881,12 +874,17 @@ function SceneCameraController({
     const endPos = new THREE.Vector3(...cameraModeConfig.position);
     const endUp = new THREE.Vector3(...cameraModeConfig.up);
 
-    // OrthographicCamera zoom (32-48) is meaningless on a PerspectiveCamera —
-    // applying it would cause extreme telephoto (narrow FOV). Fix startZoom at 1
-    // for ortho→perspective so only the position animates, not the zoom.
+    // Keep zoom constant during cross-type transitions. The canvas orthographic
+    // prop is intentionally held fixed until after the animation (see
+    // canvasOrthographic state in Viewer25D), so the same camera object is used
+    // throughout. Animating zoom across camera types is meaningless:
+    //   • ortho zoom=1 → huge frustum → scene appears tiny (the "shrink" bug)
+    //   • perspective zoom=32 → extreme telephoto → unusably narrow FOV
+    // The zoom jump happens cleanly in a single frame when the camera type
+    // switches at the very end, once the camera is already at the right position.
     const isCrossType = prevConfig.orthographic !== cameraModeConfig.orthographic;
-    const startZoom = isCrossType && !cameraModeConfig.orthographic ? 1 : (prevConfig.zoom ?? 1);
-    const endZoom = cameraModeConfig.zoom ?? 1;
+    const startZoom = prevConfig.zoom ?? 1;
+    const endZoom = isCrossType ? startZoom : (cameraModeConfig.zoom ?? 1);
 
     cam.position.copy(startPos);
     cam.up.copy(startUp);
@@ -909,12 +907,19 @@ function SceneCameraController({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraModeConfig]);
 
+  // When canvasOrthographic flips after the animation, R3F creates a brand-new
+  // camera object. Apply the final config to it so up/lookAt/zoom are correct.
+  useEffect(() => {
+    if (isFirstMount.current) return;
+    if (transitionRef.current != null) return;
+    applyViewerCameraModeConfig(camera, targetConfigRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera]);
+
   useFrame((_, delta) => {
     const t = transitionRef.current;
     if (t == null) return;
 
-    // Always use cameraRef.current so we drive whichever camera object R3F
-    // currently has in context (it may have been replaced mid-transition).
     const cam = cameraRef.current;
 
     t.elapsed += delta;
@@ -1034,6 +1039,14 @@ export default function Viewer25D({
   const activeTool = useEditorStore(s => s.activeTool);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [orbitKey, setOrbitKey] = useState<ViewerCameraMode>(cameraMode);
+  // canvasOrthographic is intentionally DELAYED — it only flips after the
+  // transition animation completes. Changing Canvas orthographic mid-animation
+  // would cause R3F to create a new camera at the destination position before
+  // useEffect can reset it, so the scene snaps to the far-away perspective
+  // position for at least one rendered frame (the "shrink" glitch).
+  const [canvasOrthographic, setCanvasOrthographic] = useState(
+    () => cameraMode === "top-down-orthographic",
+  );
   const prevCameraModeRef = useRef(cameraMode);
   useEffect(() => {
     if (prevCameraModeRef.current === cameraMode) return;
@@ -1043,6 +1056,7 @@ export default function Viewer25D({
   const handleTransitionComplete = useCallback(() => {
     setIsTransitioning(false);
     setOrbitKey(cameraMode);
+    setCanvasOrthographic(cameraMode === "top-down-orthographic");
   }, [cameraMode]);
   const sharedSceneInstanceRef = useRef<THREE.Scene>(
     resolveViewer25DSharedSceneInstance(),
@@ -1132,7 +1146,7 @@ export default function Viewer25D({
     <div className="w-full h-full bg-[#F7F6F2]">
       <Canvas
         scene={sharedSceneInstanceRef.current}
-        orthographic={cameraModeConfig.orthographic}
+        orthographic={canvasOrthographic}
         camera={{
           position: [...cameraModeConfig.position],
           near: cameraModeConfig.near,
