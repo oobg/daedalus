@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useCallback, useEffect, useRef } from "react";
+import { Suspense, useMemo, useCallback, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Html, Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
@@ -70,6 +70,25 @@ const DEFAULT_ROOM_LAYER_ELEVATIONS = resolveRoomLayerElevations({
 
 // Isometric lock: camera [8,8,8] → polar = acos(1/√3)
 const FIXED_POLAR = Math.acos(1 / Math.sqrt(3));
+
+const CAMERA_TRANSITION_DURATION = 0.5; // seconds
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+interface CameraTransitionState {
+  startPos: THREE.Vector3;
+  endPos: THREE.Vector3;
+  startQuat: THREE.Quaternion;
+  endQuat: THREE.Quaternion;
+  startUp: THREE.Vector3;
+  endUp: THREE.Vector3;
+  startZoom: number;
+  endZoom: number;
+  elapsed: number;
+  readonly duration: number;
+}
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
 // world X = canvasX / 100
@@ -811,14 +830,96 @@ function AmbientOcclusionComposer() {
 
 function SceneCameraController({
   cameraModeConfig,
+  onTransitionComplete,
 }: {
   cameraModeConfig: ReturnType<typeof resolveViewerCameraModeConfig>;
+  onTransitionComplete?: () => void;
 }) {
   const { camera } = useThree();
+  const isFirstMount = useRef(true);
+  const prevConfigRef = useRef<typeof cameraModeConfig | null>(null);
+  const transitionRef = useRef<CameraTransitionState | null>(null);
+  const onCompleteRef = useRef(onTransitionComplete);
+  onCompleteRef.current = onTransitionComplete;
 
   useEffect(() => {
-    applyViewerCameraModeConfig(camera, cameraModeConfig);
+    const prevConfig = prevConfigRef.current;
+    prevConfigRef.current = cameraModeConfig;
+
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      applyViewerCameraModeConfig(camera, cameraModeConfig);
+      return;
+    }
+
+    if (prevConfig == null) {
+      applyViewerCameraModeConfig(camera, cameraModeConfig);
+      return;
+    }
+
+    // Build start state from previous config
+    const startPos = new THREE.Vector3(...prevConfig.position);
+    const startUp = new THREE.Vector3(...prevConfig.up);
+    const startMat = new THREE.Matrix4().lookAt(
+      startPos,
+      new THREE.Vector3(...prevConfig.lookAt),
+      startUp,
+    );
+    const startQuat = new THREE.Quaternion().setFromRotationMatrix(startMat);
+
+    // Reset camera to previous position before animating
+    // (R3F may have already moved it to the new position on camera type switch)
+    camera.position.copy(startPos);
+    camera.up.copy(startUp);
+    camera.quaternion.copy(startQuat);
+    camera.near = prevConfig.near;
+    camera.far = prevConfig.far;
+    if (prevConfig.zoom != null) camera.zoom = prevConfig.zoom;
+    camera.updateProjectionMatrix();
+
+    // Build end state
+    const endPos = new THREE.Vector3(...cameraModeConfig.position);
+    const endUp = new THREE.Vector3(...cameraModeConfig.up);
+    const endMat = new THREE.Matrix4().lookAt(
+      endPos,
+      new THREE.Vector3(...cameraModeConfig.lookAt),
+      endUp,
+    );
+    const endQuat = new THREE.Quaternion().setFromRotationMatrix(endMat);
+
+    transitionRef.current = {
+      startPos,
+      endPos,
+      startQuat,
+      endQuat,
+      startUp,
+      endUp,
+      startZoom: prevConfig.zoom ?? 1,
+      endZoom: cameraModeConfig.zoom ?? 1,
+      elapsed: 0,
+      duration: CAMERA_TRANSITION_DURATION,
+    };
   }, [camera, cameraModeConfig]);
+
+  useFrame((_, delta) => {
+    const t = transitionRef.current;
+    if (t == null) return;
+
+    t.elapsed += delta;
+    const raw = Math.min(t.elapsed / t.duration, 1);
+    const p = easeInOutCubic(raw);
+
+    camera.position.lerpVectors(t.startPos, t.endPos, p);
+    camera.quaternion.slerpQuaternions(t.startQuat, t.endQuat, p);
+    camera.up.lerpVectors(t.startUp, t.endUp, p);
+    camera.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
+    camera.updateProjectionMatrix();
+
+    if (raw >= 1) {
+      transitionRef.current = null;
+      onCompleteRef.current?.();
+    }
+  });
 
   return null;
 }
@@ -917,6 +1018,18 @@ export default function Viewer25D({
   }),
 }: Props) {
   const activeTool = useEditorStore(s => s.activeTool);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [orbitKey, setOrbitKey] = useState<ViewerCameraMode>(cameraMode);
+  const prevCameraModeRef = useRef(cameraMode);
+  useEffect(() => {
+    if (prevCameraModeRef.current === cameraMode) return;
+    prevCameraModeRef.current = cameraMode;
+    setIsTransitioning(true);
+  }, [cameraMode]);
+  const handleTransitionComplete = useCallback(() => {
+    setIsTransitioning(false);
+    setOrbitKey(cameraMode);
+  }, [cameraMode]);
   const sharedSceneInstanceRef = useRef<THREE.Scene>(
     resolveViewer25DSharedSceneInstance(),
   );
@@ -1005,7 +1118,10 @@ export default function Viewer25D({
         shadows
         gl={{ preserveDrawingBuffer: true }}
       >
-        <SceneCameraController cameraModeConfig={cameraModeConfig} />
+        <SceneCameraController
+          cameraModeConfig={cameraModeConfig}
+          onTransitionComplete={handleTransitionComplete}
+        />
         <color attach="background" args={[VIEWER_PRESENTATION.backgroundColor]} />
         <fog
           attach="fog"
@@ -1105,7 +1221,8 @@ export default function Viewer25D({
         </Suspense>
 
         <OrbitControls
-          key={cameraMode}
+          key={orbitKey}
+          enabled={!isTransitioning}
           enablePan={cameraMode === "perspective" || activeTool === "select"}
           enableZoom
           enableDamping
