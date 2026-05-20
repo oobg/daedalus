@@ -841,6 +841,8 @@ function SceneCameraController({
   const transitionRef = useRef<CameraTransitionState | null>(null);
   const onCompleteRef = useRef(onTransitionComplete);
   onCompleteRef.current = onTransitionComplete;
+  const targetConfigRef = useRef(cameraModeConfig);
+  targetConfigRef.current = cameraModeConfig;
 
   useEffect(() => {
     const prevConfig = prevConfigRef.current;
@@ -923,6 +925,8 @@ function SceneCameraController({
     camera.updateProjectionMatrix();
 
     if (raw >= 1) {
+      // Snap to exact final state (near/far/fov etc. not interpolated above)
+      applyViewerCameraModeConfig(camera, targetConfigRef.current);
       transitionRef.current = null;
       onCompleteRef.current?.();
     }

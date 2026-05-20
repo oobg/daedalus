@@ -104,15 +104,16 @@ export function resolveTopDownCameraConfiguration(
 ): TopDownCameraConfiguration {
   const maxSpan = Math.max(sceneBounds.width, sceneBounds.depth, MIN_SCENE_SPAN);
 
+  // The scene group in Viewer25D is offset by -sceneCenter so the scene's
+  // geometric center lands at world [0, 0, 0].  The camera must therefore sit
+  // directly above the world origin — NOT above the raw sceneBounds center —
+  // otherwise the top-down view is offset and the 2D↔2.5D transition animates
+  // the camera away from the scene.
   return Object.freeze({
     orthographic: true,
-    position: [
-      sceneBounds.centerX,
-      maxSpan * 2 + CAMERA_PADDING,
-      sceneBounds.centerZ,
-    ] as const,
+    position: [0, maxSpan * 2 + CAMERA_PADDING, 0] as const,
     up: TOP_DOWN_UP,
-    lookAt: [sceneBounds.centerX, 0, sceneBounds.centerZ] as const,
+    lookAt: [0, 0, 0] as const,
     near: 0.1,
     far: Math.max(maxSpan * 8, 64),
     zoom: Math.max(MIN_ZOOM, 240 / maxSpan),
