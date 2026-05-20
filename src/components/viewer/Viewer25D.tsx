@@ -867,6 +867,13 @@ function SceneCameraController({
     );
     const startQuat = new THREE.Quaternion().setFromRotationMatrix(startMat);
 
+    // When camera type changes (ortho ↔ perspective), zoom scales are incompatible.
+    // Ortho zoom 30-48 applied to a PerspectiveCamera causes a huge zoom-out animation,
+    // so for ortho→perspective we always start zoom at 1.
+    const isCrossType = prevConfig.orthographic !== cameraModeConfig.orthographic;
+    const startZoom = isCrossType && !cameraModeConfig.orthographic ? 1 : (prevConfig.zoom ?? 1);
+    const endZoom = cameraModeConfig.zoom ?? 1;
+
     // Reset camera to previous position before animating
     // (R3F may have already moved it to the new position on camera type switch)
     camera.position.copy(startPos);
@@ -874,7 +881,7 @@ function SceneCameraController({
     camera.quaternion.copy(startQuat);
     camera.near = prevConfig.near;
     camera.far = prevConfig.far;
-    if (prevConfig.zoom != null) camera.zoom = prevConfig.zoom;
+    camera.zoom = startZoom;
     camera.updateProjectionMatrix();
 
     // Build end state
@@ -894,8 +901,8 @@ function SceneCameraController({
       endQuat,
       startUp,
       endUp,
-      startZoom: prevConfig.zoom ?? 1,
-      endZoom: cameraModeConfig.zoom ?? 1,
+      startZoom,
+      endZoom,
       elapsed: 0,
       duration: CAMERA_TRANSITION_DURATION,
     };
@@ -1089,17 +1096,28 @@ export default function Viewer25D({
       return isPointInPolygon({ x: cx, y: cy }, exteriorPolygon);
     });
   }, [renderPlan.roomNodes, exteriorPolygon]);
+  // Scale perspective camera distance proportionally to scene size so that
+  // small and large floor plans both fill the viewport at a comfortable zoom level.
+  const perspectivePosition = useMemo((): readonly [number, number, number] => {
+    const base = VIEWER_PRESENTATION.cameraPosition;
+    const baseDist = Math.sqrt(base[0] ** 2 + base[1] ** 2 + base[2] ** 2);
+    const maxSpan = Math.max(sceneBounds.width, sceneBounds.depth, 2);
+    const targetDist = Math.max(baseDist, maxSpan * 1.6);
+    const s = targetDist / baseDist;
+    return [base[0] * s, base[1] * s, base[2] * s];
+  }, [sceneBounds]);
+
   const viewportState = useMemo(
     () =>
       resolveViewerViewportState({
         sceneGraph: sharedSceneGraph,
         cameraMode,
         sceneBounds,
-        perspectivePosition: VIEWER_PRESENTATION.cameraPosition,
+        perspectivePosition,
         perspectiveFov: VIEWER_PRESENTATION.cameraFov,
         fixedPolarAngle: FIXED_POLAR,
       }),
-    [cameraMode, sceneBounds, sharedSceneGraph],
+    [cameraMode, perspectivePosition, sceneBounds, sharedSceneGraph],
   );
   const cameraModeConfig = viewportState.camera;
 
