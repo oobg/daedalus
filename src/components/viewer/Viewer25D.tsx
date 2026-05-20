@@ -80,8 +80,6 @@ function easeInOutCubic(t: number): number {
 interface CameraTransitionState {
   startPos: THREE.Vector3;
   endPos: THREE.Vector3;
-  startQuat: THREE.Quaternion;
-  endQuat: THREE.Quaternion;
   startUp: THREE.Vector3;
   endUp: THREE.Vector3;
   startZoom: number;
@@ -859,48 +857,30 @@ function SceneCameraController({
       return;
     }
 
-    // Build start state from previous config
     const startPos = new THREE.Vector3(...prevConfig.position);
     const startUp = new THREE.Vector3(...prevConfig.up);
-    const startMat = new THREE.Matrix4().lookAt(
-      startPos,
-      new THREE.Vector3(...prevConfig.lookAt),
-      startUp,
-    );
-    const startQuat = new THREE.Quaternion().setFromRotationMatrix(startMat);
+    const endPos = new THREE.Vector3(...cameraModeConfig.position);
+    const endUp = new THREE.Vector3(...cameraModeConfig.up);
 
-    // When camera type changes (ortho ↔ perspective), zoom scales are incompatible.
-    // Ortho zoom 30-48 applied to a PerspectiveCamera causes a huge zoom-out animation,
-    // so for ortho→perspective we always start zoom at 1.
+    // Ortho zoom (32-48) applied to a PerspectiveCamera would cause a huge zoom-out.
+    // For ortho→perspective transitions, fix startZoom at 1.
     const isCrossType = prevConfig.orthographic !== cameraModeConfig.orthographic;
     const startZoom = isCrossType && !cameraModeConfig.orthographic ? 1 : (prevConfig.zoom ?? 1);
     const endZoom = cameraModeConfig.zoom ?? 1;
 
-    // Reset camera to previous position before animating
-    // (R3F may have already moved it to the new position on camera type switch)
+    // Reset camera to the previous-mode position so the animation starts from there.
+    // R3F may have already moved it to the new position when the camera type switched.
     camera.position.copy(startPos);
     camera.up.copy(startUp);
-    camera.quaternion.copy(startQuat);
-    camera.near = prevConfig.near;
-    camera.far = prevConfig.far;
     camera.zoom = startZoom;
+    camera.near = cameraModeConfig.near;  // use target near/far to avoid clipping
+    camera.far = cameraModeConfig.far;
+    camera.lookAt(0, 0, 0);              // always face scene centre [0,0,0]
     camera.updateProjectionMatrix();
-
-    // Build end state
-    const endPos = new THREE.Vector3(...cameraModeConfig.position);
-    const endUp = new THREE.Vector3(...cameraModeConfig.up);
-    const endMat = new THREE.Matrix4().lookAt(
-      endPos,
-      new THREE.Vector3(...cameraModeConfig.lookAt),
-      endUp,
-    );
-    const endQuat = new THREE.Quaternion().setFromRotationMatrix(endMat);
 
     transitionRef.current = {
       startPos,
       endPos,
-      startQuat,
-      endQuat,
       startUp,
       endUp,
       startZoom,
@@ -918,14 +898,17 @@ function SceneCameraController({
     const raw = Math.min(t.elapsed / t.duration, 1);
     const p = easeInOutCubic(raw);
 
+    // Move camera along the interpolated path while always pointing at scene centre.
+    // Independently slerping quaternion and lerping position causes the camera to look
+    // away from the scene at intermediate frames (the root cause of the zoom-out glitch).
     camera.position.lerpVectors(t.startPos, t.endPos, p);
-    camera.quaternion.slerpQuaternions(t.startQuat, t.endQuat, p);
-    camera.up.lerpVectors(t.startUp, t.endUp, p);
+    const lerpedUp = new THREE.Vector3().lerpVectors(t.startUp, t.endUp, p).normalize();
+    camera.up.copy(lerpedUp);
+    camera.lookAt(0, 0, 0);
     camera.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
     camera.updateProjectionMatrix();
 
     if (raw >= 1) {
-      // Snap to exact final state (near/far/fov etc. not interpolated above)
       applyViewerCameraModeConfig(camera, targetConfigRef.current);
       transitionRef.current = null;
       onCompleteRef.current?.();
