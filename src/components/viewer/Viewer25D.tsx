@@ -834,13 +834,23 @@ function SceneCameraController({
   cameraModeConfig: ReturnType<typeof resolveViewerCameraModeConfig>;
   onTransitionComplete?: () => void;
 }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   const isFirstMount = useRef(true);
   const prevConfigRef = useRef<typeof cameraModeConfig | null>(null);
   const transitionRef = useRef<CameraTransitionState | null>(null);
+  // Post-switch zoom animation: after 2.5D→2D type switch, zoom from matchedZoom
+  // to the target ortho zoom over a short duration so the transition is seamless.
+  const zoomAnimRef = useRef<{
+    startZoom: number;
+    endZoom: number;
+    elapsed: number;
+    duration: number;
+  } | null>(null);
   const onCompleteRef = useRef(onTransitionComplete);
   onCompleteRef.current = onTransitionComplete;
   const targetConfigRef = useRef(cameraModeConfig);
@@ -850,6 +860,11 @@ function SceneCameraController({
   // the first run updates prevConfigRef so the second run would see
   // prevConfig == cameraModeConfig and install a no-op transition.
   const handledConfigRef = useRef<typeof cameraModeConfig | null>(null);
+  // Tracks the last known perspective FOV so that when a new OrthographicCamera
+  // is created after the 2.5D→2D transition, we can compute a matchedZoom that
+  // gives the same frustum half-height as the perspective camera had at the
+  // top-down position — eliminating the scale jump on camera type switch.
+  const perspFovRef = useRef<number>(34);
 
   useEffect(() => {
     if (handledConfigRef.current === cameraModeConfig) return;
@@ -857,7 +872,11 @@ function SceneCameraController({
 
     const cam = cameraRef.current;
     const prevConfig = prevConfigRef.current;
+    if (prevConfig != null && !prevConfig.orthographic && prevConfig.fov != null) {
+      perspFovRef.current = prevConfig.fov;
+    }
     prevConfigRef.current = cameraModeConfig;
+    zoomAnimRef.current = null; // cancel any in-progress post-switch zoom anim
 
     if (isFirstMount.current) {
       isFirstMount.current = false;
@@ -883,8 +902,12 @@ function SceneCameraController({
     //   • perspective zoom=32 → extreme telephoto → unusably narrow FOV
     // The zoom jump happens cleanly in a single frame when the camera type
     // switches at the very end, once the camera is already at the right position.
+    //
+    // For cross-type, read the actual camera zoom rather than the config zoom
+    // so that a partially-completed post-switch zoom anim doesn't cause a jump
+    // when the user switches modes again mid-animation.
     const isCrossType = prevConfig.orthographic !== cameraModeConfig.orthographic;
-    const startZoom = prevConfig.zoom ?? 1;
+    const startZoom = isCrossType ? cam.zoom : (prevConfig.zoom ?? 1);
     const endZoom = isCrossType ? startZoom : (cameraModeConfig.zoom ?? 1);
 
     cam.position.copy(startPos);
@@ -914,42 +937,86 @@ function SceneCameraController({
   // frames rendered with the wrong zoom/up/lookAt on the new camera.
   // useLayoutEffect fires synchronously after React's commit (new camera exists)
   // but before the next requestAnimationFrame, guaranteeing no wrong frame.
+  //
+  // For the 2.5D→2D cross-type transition: the animation ends with the
+  // PerspectiveCamera at the top-down position [0, Y, 0]. When the new
+  // OrthographicCamera is created, directly applying the target zoom (e.g. 50)
+  // changes the frustum half-height — the scene appears to jump in scale.
+  // Fix: derive matchedZoom so the ortho frustum equals the perspective frustum
+  // at the same camera height: matchedZoom = canvasH / (2 × Y × tan(fov/2)).
+  // Then animate from matchedZoom to the target zoom so the user lands at the
+  // correct "fit" zoom without any abrupt visual change.
   useLayoutEffect(() => {
     if (isFirstMount.current) return;
     if (transitionRef.current != null) return;
-    applyViewerCameraModeConfig(camera, targetConfigRef.current);
+    const targetConfig = targetConfigRef.current;
+    if (targetConfig.orthographic) {
+      const fovDeg = perspFovRef.current;
+      const halfFovRad = (fovDeg * Math.PI / 180) / 2;
+      const cameraY = Math.abs(camera.position.y);
+      const halfHeight = cameraY * Math.tan(halfFovRad);
+      const matchedZoom = halfHeight > 0.001
+        ? sizeRef.current.height / (2 * halfHeight)
+        : (targetConfig.zoom ?? 32);
+      applyViewerCameraModeConfig(camera, { ...targetConfig, zoom: matchedZoom });
+      const targetZoom = targetConfig.zoom ?? matchedZoom;
+      if (Math.abs(matchedZoom - targetZoom) > 0.5) {
+        zoomAnimRef.current = {
+          startZoom: matchedZoom,
+          endZoom: targetZoom,
+          elapsed: 0,
+          duration: 0.4,
+        };
+      }
+    } else {
+      applyViewerCameraModeConfig(camera, targetConfig);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera]);
 
   useFrame((_, delta) => {
     const t = transitionRef.current;
-    if (t == null) return;
+    if (t != null) {
+      const cam = cameraRef.current;
 
-    const cam = cameraRef.current;
+      t.elapsed += delta;
+      const raw = Math.min(t.elapsed / t.duration, 1);
+      const p = easeInOutCubic(raw);
 
-    t.elapsed += delta;
-    const raw = Math.min(t.elapsed / t.duration, 1);
-    const p = easeInOutCubic(raw);
+      cam.position.lerpVectors(t.startPos, t.endPos, p);
+      const lerpedUp = new THREE.Vector3().lerpVectors(t.startUp, t.endUp, p).normalize();
+      cam.up.copy(lerpedUp);
+      cam.lookAt(0, 0, 0);
+      cam.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
+      cam.updateProjectionMatrix();
 
-    cam.position.lerpVectors(t.startPos, t.endPos, p);
-    const lerpedUp = new THREE.Vector3().lerpVectors(t.startUp, t.endUp, p).normalize();
-    cam.up.copy(lerpedUp);
-    cam.lookAt(0, 0, 0);
-    cam.zoom = t.startZoom + (t.endZoom - t.startZoom) * p;
-    cam.updateProjectionMatrix();
-
-    if (raw >= 1) {
-      // Cross-type: the canvas orthographic prop is about to flip (canvasOrthographic
-      // state update queued in onCompleteRef call below), so a new camera of the
-      // correct type will be created. Applying the target config — especially zoom —
-      // to the current wrong-type camera (e.g. ortho zoom=32 on PerspectiveCamera)
-      // would produce one distorted frame before the new camera is ready.
-      // The [camera] useEffect handles applying full config to the new camera.
-      if (!t.isCrossType) {
-        applyViewerCameraModeConfig(cam, targetConfigRef.current);
+      if (raw >= 1) {
+        // Cross-type: the canvas orthographic prop is about to flip (canvasOrthographic
+        // state update queued in onCompleteRef call below), so a new camera of the
+        // correct type will be created. Applying the target config — especially zoom —
+        // to the current wrong-type camera (e.g. ortho zoom=32 on PerspectiveCamera)
+        // would produce one distorted frame before the new camera is ready.
+        // The [camera] useLayoutEffect handles applying full config to the new camera.
+        if (!t.isCrossType) {
+          applyViewerCameraModeConfig(cam, targetConfigRef.current);
+        }
+        transitionRef.current = null;
+        onCompleteRef.current?.();
       }
-      transitionRef.current = null;
-      onCompleteRef.current?.();
+      return;
+    }
+
+    const za = zoomAnimRef.current;
+    if (za != null) {
+      const cam = cameraRef.current;
+      za.elapsed += delta;
+      const raw = Math.min(za.elapsed / za.duration, 1);
+      const p = easeInOutCubic(raw);
+      cam.zoom = za.startZoom + (za.endZoom - za.startZoom) * p;
+      cam.updateProjectionMatrix();
+      if (raw >= 1) {
+        zoomAnimRef.current = null;
+      }
     }
   });
 
